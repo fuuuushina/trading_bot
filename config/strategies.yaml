@@ -11,10 +11,14 @@ strategies:
     assets: ["SPY", "QQQ", "GLD", "TLT"]
     frequency: "monthly"       # weekly | biweekly | monthly
     buy_day_of_month: 1
+    monthly_size_pct: 0.05     # 5% of portfolio per monthly buy
     dip_buy_enabled: true
     dip_threshold_pct: -0.05   # Buy extra when asset drops 5%
+    dip_size_pct: 0.075        # 7.5% of portfolio on dip buy
     bear_reduce_enabled: true
     bear_reduce_pct: 0.30      # Reduce 30% of position in bear
+    max_exposure_pct: 0.85     # Max 85% of portfolio in DCA positions
+    min_cash_reserve_pct: 0.10 # Keep 10% cash minimum
 
   # ---- True DCA (Fixed Allocation) ----
   true_dca:

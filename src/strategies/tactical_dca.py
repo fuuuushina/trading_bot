@@ -6,6 +6,8 @@ This is the old DCA behavior renamed to tactical_dca.
 """
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 
 from src.features.indicators import drawdown
@@ -16,18 +18,28 @@ class TacticalDCAStrategy(BaseStrategy):
     name = "tactical_dca"
     horizon = Horizon.LONG_TERM
 
+    def __init__(self, config: dict[str, Any]) -> None:
+        super().__init__(config)
+        self.buy_day = config.get("buy_day_of_month", 1)
+        self.dip_buy_enabled = config.get("dip_buy_enabled", True)
+        self.dip_threshold_pct = config.get("dip_threshold_pct", -0.05)
+        self.bear_reduce_enabled = config.get("bear_reduce_enabled", True)
+        self.monthly_size_pct = config.get("monthly_size_pct", 0.05)
+        self.dip_size_pct = config.get("dip_size_pct", 0.075)
+        self.max_exposure_pct = config.get("max_exposure_pct", 0.85)
+        self.min_cash_reserve_pct = config.get("min_cash_reserve_pct", 0.10)
+
     def generate_signal(
         self,
         df: pd.DataFrame,
         asset: str,
         regime: str,
     ) -> Signal:
-        cfg = self.config
         timeframe = "1d"
-        buy_day = cfg.get("buy_day_of_month", 1)
-        dip_enabled = cfg.get("dip_buy_enabled", True)
-        dip_threshold = cfg.get("dip_threshold_pct", -0.05)
-        bear_reduce = cfg.get("bear_reduce_enabled", True)
+        buy_day = self.buy_day
+        dip_enabled = self.dip_buy_enabled
+        dip_threshold = self.dip_threshold_pct
+        bear_reduce = self.bear_reduce_enabled
 
         close = df["close"]
         c = float(close.iloc[-1])
@@ -61,7 +73,10 @@ class TacticalDCAStrategy(BaseStrategy):
                         metadata={
                             "strategy": self.name,
                             "strategy_type": "growth",
-                            "sizing_mode": "risk_based",
+                            "sizing_mode": "fixed_allocation",
+                            "requested_size_pct": self.dip_size_pct * size_multiplier,
+                            "min_cash_reserve_pct": self.min_cash_reserve_pct,
+                            "max_exposure_pct": self.max_exposure_pct,
                             "trigger": "dip",
                             "ret_5d": round(ret_5d, 4),
                             "drawdown": round(dd, 4),
@@ -91,7 +106,10 @@ class TacticalDCAStrategy(BaseStrategy):
                 metadata={
                     "strategy": self.name,
                     "strategy_type": "growth",
-                    "sizing_mode": "risk_based",
+                    "sizing_mode": "fixed_allocation",
+                    "requested_size_pct": self.monthly_size_pct * size_multiplier,
+                    "min_cash_reserve_pct": self.min_cash_reserve_pct,
+                    "max_exposure_pct": self.max_exposure_pct,
                     "trigger": "scheduled",
                     "regime": regime,
                     "regime_strength": size_multiplier,

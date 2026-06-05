@@ -251,6 +251,8 @@ def metric_rows(results: list[BacktestResult]) -> list[dict[str, Any]]:
                 "win_rate_pct": round(m.get("win_rate_pct", 0.0), 1),
                 "profit_factor": round(m.get("profit_factor", 0.0), 3),
                 "vs_bh_pct": round(m.get("vs_buy_and_hold_pct", 0.0), 2),
+        "avg_position_size": round(m.get("avg_position_size", 0.0), 2),
+        "total_invested": round(m.get("total_invested", 0.0), 2),
             }
         )
     return rows
@@ -281,6 +283,16 @@ def trade_rows(df: pd.DataFrame, results: list[BacktestResult]) -> list[dict[str
                 }
             )
     return rows
+
+
+def compute_trade_stats(result: BacktestResult) -> dict[str, float]:
+    buy_sizes = [t.quantity * t.entry_price for t in result.trades if t.side == "long"]
+    total_invested = sum(buy_sizes)
+    return {
+        "avg_position_size": round(total_invested / len(buy_sizes), 2) if buy_sizes else 0.0,
+        "max_position_size": round(max(buy_sizes), 2) if buy_sizes else 0.0,
+        "total_invested": round(total_invested, 2),
+    }
 
 
 def metric_cards(results: list[BacktestResult]) -> list[Any]:
@@ -528,15 +540,70 @@ def create_app() -> Dash:
             html.Div(
                 className="config-panel",
                 children=[
-                    html.Div("Paramètres dynamiques (JSON)", className="field-label"),
-                    dcc.Textarea(
-                        id="config-overrides",
-                        value='{"strategies": {"tactical_dca": {"buy_day_of_month": 1}}, "risk": {"position_sizing": {"fixed_risk_pct": 0.005}}}',
-                        style={"width": "100%", "height": "120px", "fontFamily": "Courier New, monospace", "fontSize": "12px"},
-                    ),
+                    html.Div("Paramètres dynamiques", className="field-label"),
                     html.Div(
-                        "Exemple: {\"strategies\": {\"tactical_dca\": {\"dip_threshold_pct\": -0.05}}, \"risk\": {\"position_sizing\": {\"fixed_risk_pct\": 0.01}}}",
-                        style={"marginTop": "8px", "color": "#475569", "fontSize": "12px"},
+                        [
+                            html.Div("True DCA monthly size", className="field-label"),
+                            dcc.Slider(
+                                id="true-dca-monthly-size",
+                                min=0.01,
+                                max=0.10,
+                                step=0.005,
+                                value=0.05,
+                                marks={0.01: "1%", 0.03: "3%", 0.05: "5%", 0.08: "8%", 0.10: "10%"},
+                                tooltip={"placement": "bottom", "always_visible": False},
+                            ),
+                            html.Div("True DCA dip size", className="field-label", style={"marginTop": "12px"}),
+                            dcc.Slider(
+                                id="true-dca-dip-size",
+                                min=0.01,
+                                max=0.15,
+                                step=0.005,
+                                value=0.075,
+                                marks={0.01: "1%", 0.05: "5%", 0.10: "10%", 0.15: "15%"},
+                                tooltip={"placement": "bottom", "always_visible": False},
+                            ),
+                            html.Div("True DCA dip threshold", className="field-label", style={"marginTop": "12px"}),
+                            dcc.Slider(
+                                id="true-dca-dip-threshold",
+                                min=-0.15,
+                                max=0.0,
+                                step=0.005,
+                                value=-0.05,
+                                marks={-0.15: "-15%", -0.10: "-10%", -0.05: "-5%", 0.0: "0%"},
+                                tooltip={"placement": "bottom", "always_visible": False},
+                            ),
+                            html.Div("Tactical DCA dip threshold", className="field-label", style={"marginTop": "12px"}),
+                            dcc.Slider(
+                                id="tactical-dca-dip-threshold",
+                                min=-0.15,
+                                max=0.0,
+                                step=0.005,
+                                value=-0.05,
+                                marks={-0.15: "-15%", -0.10: "-10%", -0.05: "-5%", 0.0: "0%"},
+                                tooltip={"placement": "bottom", "always_visible": False},
+                            ),
+                            html.Div("Fixed risk % (position sizing)", className="field-label", style={"marginTop": "12px"}),
+                            dcc.Slider(
+                                id="fixed-risk-pct",
+                                min=0.001,
+                                max=0.02,
+                                step=0.001,
+                                value=0.005,
+                                marks={0.001: "0.1%", 0.005: "0.5%", 0.010: "1%", 0.020: "2%"},
+                                tooltip={"placement": "bottom", "always_visible": False},
+                            ),
+                            html.Div("Paramètres avancés (JSON)", className="field-label", style={"marginTop": "14px"}),
+                            dcc.Textarea(
+                                id="config-overrides",
+                                value='{"strategies": {"tactical_dca": {"buy_day_of_month": 1}}, "risk": {"position_sizing": {"fixed_risk_pct": 0.005}}}',
+                                style={"width": "100%", "height": "120px", "fontFamily": "Courier New, monospace", "fontSize": "12px"},
+                            ),
+                            html.Div(
+                                "Utilise les sliders pour modifier la taille des positions et le seuil de dip sans saisir de JSON.",
+                                style={"marginTop": "8px", "color": "#475569", "fontSize": "12px"},
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -580,6 +647,8 @@ def create_app() -> Dash:
                                                     {"name": "Trades", "id": "trades"},
                                                     {"name": "Win %", "id": "win_rate_pct"},
                                                     {"name": "PF", "id": "profit_factor"},
+                                                    {"name": "Avg pos", "id": "avg_position_size"},
+                                                    {"name": "Total invest", "id": "total_invested"},
                                                     {"name": "vs B&H %", "id": "vs_bh_pct"},
                                                 ],
                                                 data=[],
@@ -633,6 +702,11 @@ def create_app() -> Dash:
         State("date-range", "end_date"),
         State("strategy-select", "value"),
         State("config-overrides", "value"),
+        State("true-dca-monthly-size", "value"),
+        State("true-dca-dip-size", "value"),
+        State("true-dca-dip-threshold", "value"),
+        State("tactical-dca-dip-threshold", "value"),
+        State("fixed-risk-pct", "value"),
     )
     def update_dashboard(
         _: int | None,
@@ -641,17 +715,38 @@ def create_app() -> Dash:
         end_date: str,
         strategy_names: list[str],
         config_overrides: str,
+        true_dca_monthly_size: float,
+        true_dca_dip_size: float,
+        true_dca_dip_threshold: float,
+        tactical_dca_dip_threshold: float,
+        fixed_risk_pct: float,
     ) -> tuple[Any, Any, go.Figure, go.Figure, list[dict[str, Any]], list[dict[str, Any]]]:
         ticker = (ticker or "SPY").upper().strip()
         strategy_names = strategy_names or enabled_strategy_names()
 
-        overrides: dict[str, Any] = {}
+        overrides: dict[str, Any] = {
+            "strategies": {
+                "true_dca": {
+                    "monthly_size_pct": float(true_dca_monthly_size or 0.05),
+                    "dip_size_pct": float(true_dca_dip_size or 0.075),
+                    "dip_threshold_pct": float(true_dca_dip_threshold or -0.05),
+                },
+                "tactical_dca": {
+                    "dip_threshold_pct": float(tactical_dca_dip_threshold or -0.05),
+                },
+            },
+            "risk": {
+                "position_sizing": {
+                    "fixed_risk_pct": float(fixed_risk_pct or 0.005),
+                }
+            },
+        }
         if config_overrides:
             try:
                 parsed = json.loads(config_overrides)
                 if not isinstance(parsed, dict):
                     raise ValueError("Le JSON doit être un objet (dictionnaire).")
-                overrides = parsed
+                overrides = merge_dicts(overrides, parsed)
             except ValueError as exc:
                 status = f"Erreur JSON: {exc}"
                 return (
@@ -670,6 +765,9 @@ def create_app() -> Dash:
                 f"{ticker} | {df.index[0].date()} - {df.index[-1].date()} | "
                 f"{len(df)} bougies | capital ${build_backtester(overrides.get('risk')).initial_capital:,.2f}"
             )
+            for result in results:
+                stats = compute_trade_stats(result)
+                result.metrics.update(stats)
             return (
                 status,
                 metric_cards(results),

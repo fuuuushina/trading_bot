@@ -145,7 +145,8 @@ class Backtester:
             # Mark-to-market open positions.
             if open_trades:
                 position_value = sum(t.quantity * price for t in open_trades)
-                equity_curve.append(cash + position_value)
+                capital = cash + position_value  # keep capital current for sizing/exposure checks
+                equity_curve.append(capital)
 
                 still_open: list[BacktestTrade] = []
                 for open_trade in open_trades:
@@ -181,6 +182,7 @@ class Backtester:
 
                 open_trades = still_open
             else:
+                capital = cash
                 equity_curve.append(cash)
 
             # Swing strategies are single-position. DCA variants may keep accumulating lots.
