@@ -18,10 +18,6 @@ import yfinance as yf  # type: ignore
 from dash import Dash, Input, Output, State, dash_table, dcc, html
 import plotly.graph_objects as go
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT))
-
 from config.loader import get_risk_config, get_settings, get_strategy_config
 from src.backtesting.backtester import Backtester, BacktestResult
 from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
@@ -32,6 +28,9 @@ from src.strategies.tactical_dca import TacticalDCAStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
 from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.volatility_compression import VolatilityCompressionStrategy
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 
 STRATEGY_ORDER = [
@@ -307,7 +306,6 @@ def metric_cards(results: list[BacktestResult]) -> list[Any]:
 
 
 def create_app() -> Dash:
-    settings = get_settings()
     default_start = (date.today() - timedelta(days=365 * 5)).isoformat()
     default_end = date.today().isoformat()
     default_strategies = enabled_strategy_names()
