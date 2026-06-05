@@ -25,6 +25,7 @@ from src.strategies.base import Horizon, SignalType, no_trade
 from src.strategies.trend_following import TrendFollowingStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.breakout import BreakoutStrategy
+from src.strategies.dca import DCAStrategy
 from src.risk.risk_manager import RiskManager, RiskDecision
 from src.rules.rules_engine import RulesEngine, StatisticalRules, StrategicRules
 
@@ -224,6 +225,38 @@ class TestMeanReversionStrategy:
         signal = self.strategy.generate_signal(df, "AAPL", "range")
         # May or may not generate a signal — must be valid
         assert signal.signal in (SignalType.BUY, SignalType.SELL, SignalType.NO_TRADE)
+
+
+class TestDCAStrategy:
+
+    def test_scheduled_buy_uses_bar_date(self):
+        df = make_ohlcv(250)
+        df.index = pd.date_range(end="2023-06-01", periods=250, freq="B")
+        strategy = DCAStrategy({
+            "buy_day_of_month": 1,
+            "dip_buy_enabled": False,
+            "bear_reduce_enabled": False,
+        })
+
+        signal = strategy.generate_signal(df, "SPY", "bull_trend")
+
+        assert signal.signal == SignalType.BUY
+        assert signal.metadata["trigger"] == "scheduled"
+
+    def test_backtester_accumulates_multiple_dca_lots(self):
+        from src.backtesting.backtester import Backtester
+
+        df = make_ohlcv(500, trend=0.001, vol=0.001)
+        strategy = DCAStrategy({
+            "buy_day_of_month": 1,
+            "dip_buy_enabled": False,
+            "bear_reduce_enabled": False,
+        })
+        bt = Backtester(initial_capital=100_000.0)
+
+        result = bt.run(strategy, df, asset="SPY")
+
+        assert len(result.trades) > 1
 
 
 # ---------------------------------------------------------------------------

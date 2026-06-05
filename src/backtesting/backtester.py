@@ -11,6 +11,7 @@ Always use out-of-sample splits and stress tests.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -85,22 +86,26 @@ class Backtester:
     Bar-by-bar event-driven backtester.
 
     Usage:
-        bt = Backtester(initial_capital=100_000)
+        bt = Backtester(initial_capital=500)
         result = bt.run(strategy, df, asset="SPY")
         print(result.summary())
     """
 
     def __init__(
         self,
-        initial_capital: float = 100_000.0,
+        initial_capital: float = 500.0,
         commission_flat: float = COMMISSION_FLAT,
         slippage_pct: float = SLIPPAGE_PCT,
         risk_pct_per_trade: float = 0.005,
+        min_position_usd: float = 0.0,
+        max_position_usd: Optional[float] = None,
     ) -> None:
         self.initial_capital = initial_capital
         self.commission_flat = commission_flat
         self.slippage_pct = slippage_pct
         self.risk_pct_per_trade = risk_pct_per_trade
+        self.min_position_usd = min_position_usd
+        self.max_position_usd = max_position_usd
         self.regime_detector = MarketRegimeDetector()
 
     def run(
@@ -130,36 +135,56 @@ class Backtester:
         cash = capital
         equity_curve: list[float] = [capital] * warmup_bars
         trades: list[BacktestTrade] = []
-        open_trade: Optional[BacktestTrade] = None
+        open_trades: list[BacktestTrade] = []
 
         for i in range(warmup_bars, n):
             bar_df = df.iloc[: i + 1]
             current_bar = df.iloc[i]
             price = float(current_bar["close"])
 
-            # Mark-to-market open position
-            position_value = 0.0
-            if open_trade:
-                position_value = open_trade.quantity * price
+            # Mark-to-market open positions.
+            if open_trades:
+                position_value = sum(t.quantity * price for t in open_trades)
                 equity_curve.append(cash + position_value)
 
-                # Check stop loss / take profit
-                if open_trade.stop_loss and price <= open_trade.stop_loss:
-                    cash, open_trade = self._close_trade(
-                        open_trade, price, i, "stop_loss", cash
+                still_open: list[BacktestTrade] = []
+                for open_trade in open_trades:
+                    stop_hit = (
+                        open_trade.stop_loss is not None
+                        and (
+                            price <= open_trade.stop_loss
+                            if open_trade.side == "long"
+                            else price >= open_trade.stop_loss
+                        )
                     )
-                    trades.append(open_trade)
-                    open_trade = None
-                elif open_trade.take_profit and price >= open_trade.take_profit:
-                    cash, open_trade = self._close_trade(
-                        open_trade, price, i, "take_profit", cash
+                    target_hit = (
+                        open_trade.take_profit is not None
+                        and (
+                            price >= open_trade.take_profit
+                            if open_trade.side == "long"
+                            else price <= open_trade.take_profit
+                        )
                     )
-                    trades.append(open_trade)
-                    open_trade = None
+
+                    if stop_hit:
+                        cash, closed_trade = self._close_trade(
+                            open_trade, price, i, "stop_loss", cash
+                        )
+                        trades.append(closed_trade)
+                    elif target_hit:
+                        cash, closed_trade = self._close_trade(
+                            open_trade, price, i, "take_profit", cash
+                        )
+                        trades.append(closed_trade)
+                    else:
+                        still_open.append(open_trade)
+
+                open_trades = still_open
             else:
                 equity_curve.append(cash)
 
-            if open_trade:
+            # Swing strategies are single-position. DCA may keep accumulating lots.
+            if open_trades and strategy.name != "dca_etf":
                 continue
 
             # Detect regime
@@ -178,6 +203,20 @@ class Backtester:
             if signal.signal not in (SignalType.BUY, SignalType.SELL):
                 continue
 
+            if strategy.name == "dca_etf" and signal.signal == SignalType.SELL:
+                if not open_trades:
+                    continue
+                reduce_pct = float(strategy.config.get("bear_reduce_pct", 1.0))
+                lots_to_close = max(1, math.ceil(len(open_trades) * reduce_pct))
+                closing_lots = open_trades[:lots_to_close]
+                open_trades = open_trades[lots_to_close:]
+                for open_trade in closing_lots:
+                    cash, closed_trade = self._close_trade(
+                        open_trade, price, i, "strategy_sell", cash
+                    )
+                    trades.append(closed_trade)
+                continue
+
             # Size position
             entry_price = price * (
                 1 + self.slippage_pct if signal.signal == SignalType.BUY
@@ -187,14 +226,22 @@ class Backtester:
             risk_usd = capital * self.risk_pct_per_trade
             stop_dist = abs(entry_price - signal.stop_loss) if signal.stop_loss else entry_price * 0.02
             quantity = risk_usd / stop_dist if stop_dist > 0 else 0.0
-            cost = quantity * entry_price + commission
+            position_usd = quantity * entry_price
+
+            if self.max_position_usd is not None:
+                position_usd = min(position_usd, self.max_position_usd)
+            if position_usd < self.min_position_usd:
+                continue
+
+            quantity = position_usd / entry_price if entry_price > 0 else 0.0
+            cost = position_usd + commission
 
             if cost > cash or quantity <= 0:
                 continue
 
             cash -= cost
 
-            open_trade = BacktestTrade(
+            open_trades.append(BacktestTrade(
                 asset=asset,
                 strategy=strategy.name,
                 side="long" if signal.signal == SignalType.BUY else "short",
@@ -205,15 +252,15 @@ class Backtester:
                 take_profit=signal.take_profit,
                 commission=commission,
                 regime_at_entry=regime,
-            )
+            ))
 
         # Close any open trade at end
-        if open_trade:
+        for open_trade in open_trades:
             final_price = float(df.iloc[-1]["close"])
-            cash, open_trade = self._close_trade(
+            cash, closed_trade = self._close_trade(
                 open_trade, final_price, n - 1, "end_of_backtest", cash
             )
-            trades.append(open_trade)
+            trades.append(closed_trade)
 
         final_capital = cash
         equity_series = pd.Series(
@@ -276,16 +323,20 @@ class Backtester:
     # Helpers
     # ------------------------------------------------------------------ #
 
-    @staticmethod
     def _close_trade(
+        self,
         trade: BacktestTrade,
         price: float,
         bar_idx: int,
         reason: str,
         cash: float,
     ) -> tuple[float, BacktestTrade]:
-        slippage_adj = price * (1 - SLIPPAGE_PCT) if trade.side == "long" else price * (1 + SLIPPAGE_PCT)
-        commission = COMMISSION_FLAT
+        slippage_adj = (
+            price * (1 - self.slippage_pct)
+            if trade.side == "long"
+            else price * (1 + self.slippage_pct)
+        )
+        commission = self.commission_flat
         direction = 1 if trade.side == "long" else -1
         gross_pnl = direction * (slippage_adj - trade.entry_price) * trade.quantity
         net_pnl = gross_pnl - commission - trade.commission

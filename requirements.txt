@@ -23,9 +23,9 @@ requests>=2.31.0
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
-# Monitoring / Dashboard (optional)
-# dash>=2.14.0
-# plotly>=5.18.0
+# Monitoring / Dashboard
+dash>=2.14.0
+plotly>=5.18.0
 
 # Scheduling (for production loop)
 schedule>=1.2.0

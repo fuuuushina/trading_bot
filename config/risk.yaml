@@ -77,5 +77,5 @@ position_sizing:
   method: "fixed_fractional"   # fixed_fractional | kelly | equal_weight
   kelly_fraction: 0.25          # Conservative Kelly (quarter-Kelly)
   fixed_risk_pct: 0.005
-  min_position_usd: 100.0
-  max_position_usd: 10000.0
+  min_position_usd: 10.0
+  max_position_usd: 100.0

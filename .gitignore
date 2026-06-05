@@ -9,6 +9,7 @@ secrets/
 
 # Data and cache (can be large)
 data/cache/
+data/yfinance_cache/
 data/logs/
 data/reports/
 

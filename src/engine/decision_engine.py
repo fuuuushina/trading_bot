@@ -89,6 +89,9 @@ class DecisionEngine:
 
         # Build strategy library
         scfg = strategy_cfg.get("strategies", {})
+        self._enabled_strategies = {
+            name for name, cfg in scfg.items() if cfg.get("enabled", False)
+        }
         self._strategies = {
             "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
             "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
@@ -151,6 +154,9 @@ class DecisionEngine:
             for horizon_name, strategy_names in active_by_horizon.items():
                 for strategy_name in strategy_names:
                     if strategy_name not in self._strategies:
+                        continue
+                    if strategy_name not in self._enabled_strategies:
+                        logger.debug("Strategy disabled: %s", strategy_name)
                         continue
 
                     strategy = self._strategies[strategy_name]

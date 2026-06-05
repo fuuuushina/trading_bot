@@ -45,9 +45,13 @@ def run_backtest(ticker: str, strategy_name: str) -> None:
 
     from src.backtesting.backtester import Backtester
     from src.features.indicators import compute_all_features
+    from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
     from src.strategies.trend_following import TrendFollowingStrategy
     from src.strategies.mean_reversion import MeanReversionStrategy
     from src.strategies.breakout import BreakoutStrategy
+    from src.strategies.dca import DCAStrategy
+    from src.strategies.momentum import MomentumStrategy
+    from src.strategies.volatility_compression import VolatilityCompressionStrategy
 
     strategy_cfg = get_strategy_config()
     scfg = strategy_cfg.get("strategies", {})
@@ -56,22 +60,41 @@ def run_backtest(ticker: str, strategy_name: str) -> None:
         "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
         "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
         "breakout": BreakoutStrategy(scfg.get("breakout", {})),
+        "dca_etf": DCAStrategy(scfg.get("dca_etf", {})),
+        "momentum": MomentumStrategy(scfg.get("momentum", {})),
+        "volatility_compression": VolatilityCompressionStrategy(
+            scfg.get("volatility_compression", {})
+        ),
     }
 
     if strategy_name not in strategies:
         print(f"Unknown strategy: {strategy_name}. Choose from {list(strategies.keys())}")
         sys.exit(1)
 
+    configure_yfinance_cache()
     print(f"\nDownloading {ticker} data...")
     df = yf.download(ticker, period="5y", auto_adjust=True, progress=False)
-    df.columns = [c.lower() for c in df.columns]
 
     if df.empty:
         print(f"No data for {ticker}")
         sys.exit(1)
 
+    df = normalize_yfinance_columns(df)
+
     print(f"Running backtest: {strategy_name} on {ticker} ({len(df)} bars)...")
-    bt = Backtester(initial_capital=100_000.0)
+    settings = get_settings()
+    risk_cfg = get_risk_config()
+    broker_cfg = settings.get("broker", {}).get("paper", {})
+    sizing_cfg = risk_cfg.get("position_sizing", {})
+
+    bt = Backtester(
+        initial_capital=broker_cfg.get("initial_capital", 500.0),
+        commission_flat=broker_cfg.get("commission_per_trade", 0.0),
+        slippage_pct=broker_cfg.get("slippage_pct", 0.001),
+        risk_pct_per_trade=sizing_cfg.get("fixed_risk_pct", 0.005),
+        min_position_usd=sizing_cfg.get("min_position_usd", 0.0),
+        max_position_usd=sizing_cfg.get("max_position_usd"),
+    )
     result = bt.run(strategies[strategy_name], df, asset=ticker)
     print(result.summary())
 
@@ -89,6 +112,7 @@ def run_paper_loop() -> None:
     import yfinance as yf  # type: ignore
 
     from src.ai.advisory import AIAdvisoryLayer
+    from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
     from src.engine.decision_engine import DecisionEngine
     from src.execution.paper_broker import PaperBroker, OrderSide
     from src.features.indicators import compute_all_features
@@ -117,6 +141,7 @@ def run_paper_loop() -> None:
         settings.get("universe", {}).get("long_term", [])
     )[:10]  # Cap at 10 for now
 
+    configure_yfinance_cache()
     logger = logging.getLogger("main")
     logger.info("Paper trading loop started. Universe: %s", universe)
     alerts.send("Bot started in PAPER MODE.", "INFO")
@@ -140,7 +165,7 @@ def run_paper_loop() -> None:
                     )
                     if df_raw.empty or len(df_raw) < 50:
                         continue
-                    df_raw.columns = [c.lower() for c in df_raw.columns]
+                    df_raw = normalize_yfinance_columns(df_raw)
                     data_map[ticker] = compute_all_features(df_raw)
                 except Exception as exc:
                     logger.warning("Data download failed for %s: %s", ticker, exc)

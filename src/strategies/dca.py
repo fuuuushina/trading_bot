@@ -8,8 +8,6 @@ Dollar-Cost Averaging strategy for long-term ETF positions.
 """
 from __future__ import annotations
 
-from datetime import date
-
 import pandas as pd
 
 from src.features.indicators import drawdown, ema
@@ -41,7 +39,7 @@ class DCAStrategy(BaseStrategy):
 
         close = df["close"]
         c = float(close.iloc[-1])
-        today = date.today()
+        today = df.index[-1].date()
 
         # ---- Bear market guard ----
         if bear_reduce and regime in ("bear_trend", "panic"):

@@ -16,6 +16,8 @@ from typing import Optional
 
 import pandas as pd
 
+from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
+
 logger = logging.getLogger(__name__)
 
 CACHE_DIR = Path("data/cache")
@@ -139,6 +141,7 @@ class MarketDataEngine:
         }
         period = period_map.get(interval, "max")
 
+        configure_yfinance_cache()
         df = yf.download(
             ticker,
             period=period,
@@ -149,6 +152,8 @@ class MarketDataEngine:
 
         if df.empty:
             raise DataQualityError(f"No data returned for {ticker}")
+
+        df = normalize_yfinance_columns(df)
 
         # Slice to requested lookback
         if lookback_days and interval in ("1d",):
@@ -162,8 +167,7 @@ class MarketDataEngine:
             raise DataQualityError(f"{ticker}: empty DataFrame.")
 
         # Normalise columns for checks
-        df.columns = [c.lower() if isinstance(c, str) else str(c).lower()
-                      for c in df.columns]
+        df = normalize_yfinance_columns(df)
 
         required = {"open", "high", "low", "close"}
         missing_cols = required - set(df.columns)
@@ -212,8 +216,7 @@ class MarketDataEngine:
     @staticmethod
     def _normalise(df: pd.DataFrame) -> pd.DataFrame:
         """Ensure lowercase columns, sorted datetime index."""
-        df.columns = [c.lower() if isinstance(c, str) else str(c).lower()
-                      for c in df.columns]
+        df = normalize_yfinance_columns(df)
         if not isinstance(df.index, pd.DatetimeIndex):
             df.index = pd.to_datetime(df.index)
         df = df.sort_index()

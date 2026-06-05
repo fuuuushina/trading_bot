@@ -19,7 +19,7 @@ strategies:
 
   # ---- Portfolio Rebalancing ----
   rebalancing:
-    enabled: true
+    enabled: false
     horizon: "long_term"
     frequency: "monthly"
     target_weights:
@@ -46,7 +46,7 @@ strategies:
 
   # ---- Mean Reversion (Swing + Intraday) ----
   mean_reversion:
-    enabled: true
+    enabled: false
     horizon: "swing"           # Also used for intraday with different params
     timeframe: "1d"
     zscore_entry: 2.0          # Enter when zscore < -2 (oversold) or > 2 (overbought)
@@ -76,7 +76,7 @@ strategies:
 
   # ---- Momentum (Swing) ----
   momentum:
-    enabled: true
+    enabled: false
     horizon: "swing"
     timeframe: "1d"
     lookback_returns: [5, 20, 60]   # Days for momentum calculation
@@ -89,7 +89,7 @@ strategies:
 
   # ---- Volatility Compression Breakout ----
   volatility_compression:
-    enabled: true
+    enabled: false
     horizon: "swing"
     timeframe: "1d"
     bb_squeeze_threshold: 0.02   # BB width / price < 2%
@@ -101,7 +101,7 @@ strategies:
 
   # ---- Intraday Mean Reversion ----
   intraday_mean_reversion:
-    enabled: true
+    enabled: false
     horizon: "intraday"
     timeframe: "5m"
     zscore_entry: 2.5
@@ -118,7 +118,7 @@ strategies:
 
   # ---- Intraday Breakout ----
   intraday_breakout:
-    enabled: true
+    enabled: false
     horizon: "intraday"
     timeframe: "5m"
     opening_range_minutes: 30     # ORB strategy
@@ -131,38 +131,38 @@ strategies:
 # ---- Regime-to-strategy mapping ----
 regime_strategy_map:
   bull_trend:
-    long_term: ["dca_etf", "rebalancing"]
-    swing: ["trend_following", "momentum", "breakout"]
-    intraday: ["intraday_breakout", "intraday_mean_reversion"]
+    long_term: ["dca_etf"]
+    swing: ["trend_following", "breakout"]
+    intraday: []
   bear_trend:
     long_term: ["dca_etf"]         # Reduced DCA only
     swing: []                       # No swing in bear
     intraday: []
   range:
-    long_term: ["rebalancing"]
-    swing: ["mean_reversion", "volatility_compression"]
-    intraday: ["intraday_mean_reversion"]
+    long_term: ["dca_etf"]
+    swing: []
+    intraday: []
   high_volatility:
     long_term: ["dca_etf"]
-    swing: ["mean_reversion"]
+    swing: []
     intraday: []
   low_volatility:
-    long_term: ["dca_etf", "rebalancing"]
-    swing: ["volatility_compression", "trend_following"]
-    intraday: ["intraday_mean_reversion"]
+    long_term: ["dca_etf"]
+    swing: ["trend_following"]
+    intraday: []
   panic:
-    long_term: []
+    long_term: ["dca_etf"]
     swing: []
     intraday: []
   euphoric:
-    long_term: ["rebalancing"]     # Rebalance to trim
+    long_term: ["dca_etf"]
     swing: []
     intraday: []
   compression:
-    long_term: ["rebalancing"]
-    swing: ["volatility_compression"]
+    long_term: ["dca_etf"]
+    swing: []
     intraday: []
   breakout_expansion:
     long_term: ["dca_etf"]
-    swing: ["breakout", "momentum", "trend_following"]
-    intraday: ["intraday_breakout"]
+    swing: ["breakout", "trend_following"]
+    intraday: []

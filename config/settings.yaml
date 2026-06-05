@@ -58,8 +58,8 @@ market_hours:
 # ---- Broker ----
 broker:
   paper:
-    initial_capital: 100000.0
-    commission_per_trade: 1.0       # flat fee USD
+    initial_capital: 500.0
+    commission_per_trade: 0.0       # flat fee USD
     commission_pct: 0.0             # 0 = flat only
     slippage_pct: 0.001             # 0.1%
   live:
@@ -110,4 +110,4 @@ monitoring:
   daily_report_time: "21:00"
   weekly_report_day: "Sunday"
   dashboard_port: 8050
-  dashboard_enabled: false
+  dashboard_enabled: true
