@@ -105,7 +105,12 @@ def compute_metrics(
 
         gross_profit = sum(wins) if wins else 0.0
         gross_loss = abs(sum(losses)) if losses else 0.0
-        metrics["profit_factor"] = round(gross_profit / (gross_loss + 1e-10), 4)
+        if gross_loss > 0:
+            metrics["profit_factor"] = round(gross_profit / gross_loss, 4)
+        elif gross_profit > 0:
+            metrics["profit_factor"] = float("inf")
+        else:
+            metrics["profit_factor"] = 0.0
 
         metrics["expectancy_usd"] = round(np.mean(pnls) if pnls else 0.0, 4)
         metrics["avg_win_usd"] = round(np.mean(wins) if wins else 0.0, 4)

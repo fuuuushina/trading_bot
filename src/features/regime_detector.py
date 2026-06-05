@@ -46,6 +46,8 @@ class MarketRegime(str, Enum):
 class RegimeResult:
     regime: MarketRegime
     confidence: float                   # 0–1
+    score: int = 0
+    market_label: str = "unknown"
     sub_signals: dict[str, str | float] = field(default_factory=dict)
     explanation: str = ""
 
@@ -53,6 +55,8 @@ class RegimeResult:
         return {
             "regime": self.regime.value,
             "confidence": round(self.confidence, 3),
+            "score": self.score,
+            "market_label": self.market_label,
             "sub_signals": self.sub_signals,
             "explanation": self.explanation,
         }
@@ -206,6 +210,11 @@ class MarketRegimeDetector:
         elif ret_20 < -0.08:
             votes[MarketRegime.PANIC] += 1
 
+        # ---- Calculate market regime score ----
+        score, label = self._compute_market_score(close, e20, e50, e200, vix)
+        signals["market_score"] = score
+        signals["market_label"] = label
+
         # ---- Determine winner ----
         votes.pop(MarketRegime.UNKNOWN, None)
         best_regime = max(votes, key=lambda r: votes[r])
@@ -218,6 +227,8 @@ class MarketRegimeDetector:
             return RegimeResult(
                 regime=MarketRegime.UNKNOWN,
                 confidence=0.1,
+                score=score,
+                market_label=label,
                 sub_signals=signals,
                 explanation="No clear regime signal.",
             )
@@ -227,6 +238,8 @@ class MarketRegimeDetector:
         return RegimeResult(
             regime=best_regime,
             confidence=round(confidence, 3),
+            score=score,
+            market_label=label,
             sub_signals=signals,
             explanation=explanation,
         )
@@ -255,3 +268,44 @@ class MarketRegimeDetector:
             else ""
         )
         return " ".join(p for p in parts if p)
+
+    def _compute_market_score(
+        self,
+        close: pd.Series,
+        e20: float,
+        e50: float,
+        e200: float,
+        vix: Optional[pd.Series],
+    ) -> tuple[int, str]:
+        score = 0
+
+        if close.iloc[-1] > e200:
+            score += 1
+        if close.iloc[-1] > e50:
+            score += 1
+        if close.iloc[-1] > e20:
+            score += 1
+
+        if len(close) > 63:
+            ret_3m = (close.iloc[-1] - close.iloc[-63]) / close.iloc[-63]
+            if ret_3m > 0:
+                score += 1
+        if len(close) > 126:
+            ret_6m = (close.iloc[-1] - close.iloc[-126]) / close.iloc[-126]
+            if ret_6m > 0:
+                score += 1
+
+        if vix is not None and len(vix) >= 200:
+            vix_200 = vix.rolling(200).mean().iloc[-1]
+            if not np.isnan(vix_200) and vix.iloc[-1] < vix_200:
+                # Add a small confidence boost when volatility is below its long-term average.
+                score = min(score + 1, 5)
+
+        if score <= 1:
+            label = "bear"
+        elif score <= 3:
+            label = "neutral"
+        else:
+            label = "bull"
+
+        return score, label

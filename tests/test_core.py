@@ -144,11 +144,20 @@ class TestRegimeDetector:
         assert isinstance(result.explanation, str)
         assert isinstance(result.sub_signals, dict)
 
+    def test_score_and_label_present(self):
+        df = make_bull_trend(300)
+        result = self.detector.detect(df)
+        assert hasattr(result, "score")
+        assert hasattr(result, "market_label")
+        assert result.market_label in ("bull", "neutral", "bear", "unknown")
+
     def test_to_dict(self):
         df = make_ohlcv(250)
         d = self.detector.detect(df).to_dict()
         assert "regime" in d
         assert "confidence" in d
+        assert "score" in d
+        assert "market_label" in d
         assert "sub_signals" in d
 
 
@@ -243,6 +252,22 @@ class TestDCAStrategy:
         assert signal.signal == SignalType.BUY
         assert signal.metadata["trigger"] == "scheduled"
 
+    def test_bear_regime_reduces_dca_allocation(self):
+        df = make_ohlcv(250)
+        df.index = pd.date_range(end="2023-06-01", periods=250, freq="B")
+        strategy = DCAStrategy({
+            "buy_day_of_month": 1,
+            "dip_buy_enabled": False,
+            "bear_reduce_enabled": True,
+        })
+
+        signal = strategy.generate_signal(df, "SPY", "bear_trend")
+
+        assert signal.signal == SignalType.BUY
+        assert signal.metadata["trigger"] == "scheduled"
+        assert signal.metadata["size_multiplier"] == 0.25
+        assert signal.metadata["risk_multiplier"] == 0.35
+
     def test_backtester_accumulates_multiple_dca_lots(self):
         from src.backtesting.backtester import Backtester
 
@@ -257,6 +282,44 @@ class TestDCAStrategy:
         result = bt.run(strategy, df, asset="SPY")
 
         assert len(result.trades) > 1
+
+
+class TestMetrics:
+
+    def test_profit_factor_infinite_when_no_losses(self):
+        from src.backtesting.backtester import BacktestTrade
+        from src.backtesting.metrics import compute_metrics
+
+        equity = pd.Series([100.0, 101.0, 102.0])
+        trades = [
+            BacktestTrade(
+                asset="SPY",
+                strategy="dca_etf",
+                side="long",
+                entry_bar=0,
+                entry_price=100.0,
+                exit_bar=1,
+                exit_price=101.0,
+                quantity=1.0,
+                pnl=1.0,
+                pnl_pct=1.0,
+            ),
+            BacktestTrade(
+                asset="SPY",
+                strategy="dca_etf",
+                side="long",
+                entry_bar=1,
+                entry_price=101.0,
+                exit_bar=2,
+                exit_price=102.0,
+                quantity=1.0,
+                pnl=1.0,
+                pnl_pct=0.99,
+            ),
+        ]
+
+        metrics = compute_metrics(equity, trades, bah_return_pct=0.0)
+        assert metrics["profit_factor"] == float("inf")
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +430,14 @@ class TestRiskManager:
         verdict = self.rm.evaluate(signal, PORTFOLIO_STATE, [], rules_approved=True)
         if verdict.is_executable:
             assert verdict.approved_size_usd >= 100.0
+
+    def test_risk_multiplier_increases_position_size(self):
+        signal = make_buy_signal()
+        base_verdict = self.rm.evaluate(signal, PORTFOLIO_STATE, [], rules_approved=True)
+        signal.metadata["risk_multiplier"] = 2.0
+        boosted_verdict = self.rm.evaluate(signal, PORTFOLIO_STATE, [], rules_approved=True)
+        if base_verdict.is_executable and boosted_verdict.is_executable:
+            assert boosted_verdict.approved_size_usd >= base_verdict.approved_size_usd
 
     def test_reset_daily(self):
         self.rm._daily_pnl = -500.0

@@ -356,13 +356,36 @@ class RiskManager:
         self, signal: Signal, total_capital: float
     ) -> float:
         """
-        Fixed-fractional sizing:
-          risk_per_trade = total_capital * risk_pct
-          stop_distance = |entry - stop_loss|
-          shares = risk_per_trade / stop_distance
-          size_usd = shares * entry
+        Fixed-fractional sizing with optional strategy guidance.
+        If a strategy provides a requested size, use it. Otherwise apply
+        a risk multiplier to the fixed risk sizing.
         """
-        risk_pct = self.r.get("max_risk_per_trade_pct", 0.005)
+        requested_size_usd = signal.metadata.get("requested_size_usd")
+        if requested_size_usd is not None:
+            try:
+                requested = float(requested_size_usd)
+                if requested > 0:
+                    return requested
+            except (TypeError, ValueError):
+                pass
+
+        requested_size_pct = signal.metadata.get("requested_size_pct")
+        if requested_size_pct is not None:
+            try:
+                pct = float(requested_size_pct)
+                if 0.0 < pct <= 1.0:
+                    return total_capital * pct
+            except (TypeError, ValueError):
+                pass
+
+        risk_multiplier = 1.0
+        if "risk_multiplier" in signal.metadata:
+            try:
+                risk_multiplier = float(signal.metadata.get("risk_multiplier", 1.0))
+            except (TypeError, ValueError):
+                risk_multiplier = 1.0
+
+        risk_pct = self.r.get("max_risk_per_trade_pct", 0.005) * risk_multiplier
         risk_usd = total_capital * risk_pct
 
         entry = signal.entry_price or 0.0
@@ -374,8 +397,15 @@ class RiskManager:
                 shares = risk_usd / stop_distance
                 return shares * entry
 
-        # Fallback: 1% of capital
-        return total_capital * 0.01
+        size_multiplier = 1.0
+        if "size_multiplier" in signal.metadata:
+            try:
+                size_multiplier = float(signal.metadata.get("size_multiplier", 1.0))
+            except (TypeError, ValueError):
+                size_multiplier = 1.0
+
+        # Fallback: 1% of capital scaled by DCA/regime size.
+        return total_capital * 0.01 * size_multiplier
 
     def _apply_allocation_cap(
         self, signal: Signal, size_usd: float, portfolio_state: dict

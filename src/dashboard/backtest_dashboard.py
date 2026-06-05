@@ -7,6 +7,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -52,8 +53,24 @@ CHART_COLORS = {
 }
 
 
-def strategy_registry() -> dict[str, Any]:
+def merge_dicts(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    merged = {**base}
+    for key, value in overrides.items():
+        if (
+            key in merged
+            and isinstance(merged[key], dict)
+            and isinstance(value, dict)
+        ):
+            merged[key] = merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def strategy_registry(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     scfg = get_strategy_config().get("strategies", {})
+    if overrides:
+        scfg = merge_dicts(scfg, overrides)
     return {
         "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
         "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
@@ -72,9 +89,11 @@ def enabled_strategy_names() -> list[str]:
     return enabled or ["dca_etf"]
 
 
-def build_backtester() -> Backtester:
+def build_backtester(risk_override: dict[str, Any] | None = None) -> Backtester:
     settings = get_settings()
     risk_cfg = get_risk_config()
+    if risk_override:
+        risk_cfg = merge_dicts(risk_cfg, {"risk": risk_override})
     broker_cfg = settings.get("broker", {}).get("paper", {})
     sizing_cfg = risk_cfg.get("position_sizing", {})
     return Backtester(
@@ -112,13 +131,16 @@ def run_selected_backtests(
     ticker: str,
     df: pd.DataFrame,
     strategy_names: list[str],
+    config_overrides: dict[str, Any] | None = None,
 ) -> list[BacktestResult]:
-    registry = strategy_registry()
+    strategies_override = config_overrides.get("strategies") if config_overrides else None
+    risk_override = config_overrides.get("risk") if config_overrides else None
+    registry = strategy_registry(strategies_override)
     results: list[BacktestResult] = []
     for name in strategy_names:
         if name not in registry:
             continue
-        bt = build_backtester()
+        bt = build_backtester(risk_override)
         results.append(bt.run(registry[name], df, asset=ticker.upper().strip()))
     return results
 
@@ -329,6 +351,13 @@ def create_app() -> Dash:
         top: 0;
         z-index: 5;
       }
+      .config-panel {
+        margin: 0 18px 16px;
+        padding: 14px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
       .brand {
         font-size: 22px;
         font-weight: 700;
@@ -495,6 +524,21 @@ def create_app() -> Dash:
                 ],
             ),
             html.Div(
+                className="config-panel",
+                children=[
+                    html.Div("Paramètres dynamiques (JSON)", className="field-label"),
+                    dcc.Textarea(
+                        id="config-overrides",
+                        value='{"strategies": {"dca_etf": {"buy_day_of_month": 1}}, "risk": {"position_sizing": {"fixed_risk_pct": 0.005}}}',
+                        style={"width": "100%", "height": "120px", "fontFamily": "Courier New, monospace", "fontSize": "12px"},
+                    ),
+                    html.Div(
+                        "Exemple: {\"strategies\": {\"dca_etf\": {\"dip_threshold_pct\": -0.05}}, \"risk\": {\"position_sizing\": {\"fixed_risk_pct\": 0.01}}}",
+                        style={"marginTop": "8px", "color": "#475569", "fontSize": "12px"},
+                    ),
+                ],
+            ),
+            html.Div(
                 className="content",
                 children=[
                     dcc.Loading(
@@ -586,6 +630,7 @@ def create_app() -> Dash:
         State("date-range", "start_date"),
         State("date-range", "end_date"),
         State("strategy-select", "value"),
+        State("config-overrides", "value"),
     )
     def update_dashboard(
         _: int | None,
@@ -593,16 +638,35 @@ def create_app() -> Dash:
         start_date: str,
         end_date: str,
         strategy_names: list[str],
+        config_overrides: str,
     ) -> tuple[Any, Any, go.Figure, go.Figure, list[dict[str, Any]], list[dict[str, Any]]]:
         ticker = (ticker or "SPY").upper().strip()
         strategy_names = strategy_names or enabled_strategy_names()
 
+        overrides: dict[str, Any] = {}
+        if config_overrides:
+            try:
+                parsed = json.loads(config_overrides)
+                if not isinstance(parsed, dict):
+                    raise ValueError("Le JSON doit être un objet (dictionnaire).")
+                overrides = parsed
+            except ValueError as exc:
+                status = f"Erreur JSON: {exc}"
+                return (
+                    status,
+                    [],
+                    make_empty_figure("Courbes equity"),
+                    make_empty_figure("Drawdown"),
+                    [],
+                    [],
+                )
+
         try:
             df = download_prices(ticker, start_date, end_date)
-            results = run_selected_backtests(ticker, df, strategy_names)
+            results = run_selected_backtests(ticker, df, strategy_names, overrides)
             status = (
                 f"{ticker} | {df.index[0].date()} - {df.index[-1].date()} | "
-                f"{len(df)} bougies | capital ${build_backtester().initial_capital:,.2f}"
+                f"{len(df)} bougies | capital ${build_backtester(overrides.get('risk')).initial_capital:,.2f}"
             )
             return (
                 status,
