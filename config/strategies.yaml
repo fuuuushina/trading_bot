@@ -4,8 +4,8 @@
 
 strategies:
 
-  # ---- DCA ETF (Long Term) ----
-  dca_etf:
+  # ---- Tactical DCA (Legacy) ----
+  tactical_dca:
     enabled: true
     horizon: "long_term"
     assets: ["SPY", "QQQ", "GLD", "TLT"]
@@ -13,9 +13,21 @@ strategies:
     buy_day_of_month: 1
     dip_buy_enabled: true
     dip_threshold_pct: -0.05   # Buy extra when asset drops 5%
-    dip_extra_allocation_pct: 0.5  # 50% extra on dip
     bear_reduce_enabled: true
     bear_reduce_pct: 0.30      # Reduce 30% of position in bear
+
+  # ---- True DCA (Fixed Allocation) ----
+  true_dca:
+    enabled: true
+    horizon: "long_term"
+    assets: ["SPY"]
+    buy_day_of_month: 1
+    monthly_size_pct: 0.05
+    dip_buy_enabled: true
+    dip_size_pct: 0.075
+    dip_threshold_pct: -0.05
+    max_exposure_pct: 0.85
+    min_cash_reserve_pct: 0.10
 
   # ---- Portfolio Rebalancing ----
   rebalancing:
@@ -131,38 +143,38 @@ strategies:
 # ---- Regime-to-strategy mapping ----
 regime_strategy_map:
   bull_trend:
-    long_term: ["dca_etf"]
+    long_term: ["true_dca", "tactical_dca"]
     swing: ["trend_following", "breakout"]
     intraday: []
   bear_trend:
-    long_term: ["dca_etf"]         # Reduced DCA only
+    long_term: ["tactical_dca"]         # Reduced DCA only
     swing: []                       # No swing in bear
     intraday: []
   range:
-    long_term: ["dca_etf"]
+    long_term: ["true_dca", "tactical_dca"]
     swing: []
     intraday: []
   high_volatility:
-    long_term: ["dca_etf"]
+    long_term: ["true_dca", "tactical_dca"]
     swing: []
     intraday: []
   low_volatility:
-    long_term: ["dca_etf"]
+    long_term: ["true_dca", "tactical_dca"]
     swing: ["trend_following"]
     intraday: []
   panic:
-    long_term: ["dca_etf"]
+    long_term: ["tactical_dca"]
     swing: []
     intraday: []
   euphoric:
-    long_term: ["dca_etf"]
+    long_term: ["true_dca", "tactical_dca"]
     swing: []
     intraday: []
   compression:
-    long_term: ["dca_etf"]
+    long_term: ["true_dca", "tactical_dca"]
     swing: []
     intraday: []
   breakout_expansion:
-    long_term: ["dca_etf"]
+    long_term: ["true_dca", "tactical_dca"]
     swing: ["breakout", "trend_following"]
     intraday: []

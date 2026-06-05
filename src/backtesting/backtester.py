@@ -183,8 +183,8 @@ class Backtester:
             else:
                 equity_curve.append(cash)
 
-            # Swing strategies are single-position. DCA may keep accumulating lots.
-            if open_trades and strategy.name != "dca_etf":
+            # Swing strategies are single-position. DCA variants may keep accumulating lots.
+            if open_trades and strategy.name not in ("tactical_dca", "true_dca"):
                 continue
 
             # Detect regime
@@ -203,7 +203,7 @@ class Backtester:
             if signal.signal not in (SignalType.BUY, SignalType.SELL):
                 continue
 
-            if strategy.name == "dca_etf" and signal.signal == SignalType.SELL:
+            if strategy.name in ("tactical_dca", "true_dca") and signal.signal == SignalType.SELL:
                 if not open_trades:
                     continue
                 reduce_pct = float(strategy.config.get("bear_reduce_pct", 1.0))
@@ -223,13 +223,38 @@ class Backtester:
                 else 1 - self.slippage_pct
             )
             commission = self.commission_flat + entry_price * 0.0
-            risk_usd = capital * self.risk_pct_per_trade
-            stop_dist = abs(entry_price - signal.stop_loss) if signal.stop_loss else entry_price * 0.02
-            quantity = risk_usd / stop_dist if stop_dist > 0 else 0.0
-            position_usd = quantity * entry_price
+            metadata = signal.metadata or {}
+            sizing_mode = metadata.get("sizing_mode")
+
+            if sizing_mode == "fixed_allocation":
+                requested_pct = float(metadata.get("requested_size_pct", 0.05))
+                min_cash_reserve_pct = float(metadata.get("min_cash_reserve_pct", 0.10))
+                max_spend = cash * (1 - min_cash_reserve_pct)
+                position_usd = capital * requested_pct
+                position_usd = min(position_usd, max_spend)
+                quantity = position_usd / entry_price if entry_price > 0 else 0.0
+            else:
+                risk_usd = capital * self.risk_pct_per_trade
+                if signal.stop_loss is not None:
+                    stop_dist = abs(entry_price - signal.stop_loss)
+                else:
+                    stop_dist = entry_price * 0.02
+                quantity = risk_usd / stop_dist if stop_dist > 0 else 0.0
+                position_usd = quantity * entry_price
 
             if self.max_position_usd is not None:
                 position_usd = min(position_usd, self.max_position_usd)
+
+            max_exposure_pct = metadata.get("max_exposure_pct")
+            if max_exposure_pct is not None:
+                current_position_value = sum(
+                    t.quantity * entry_price for t in open_trades if t.asset == asset
+                )
+                max_allowed_value = capital * float(max_exposure_pct)
+                remaining_allowed_value = max_allowed_value - current_position_value
+                position_usd = min(position_usd, max(0.0, remaining_allowed_value))
+                quantity = position_usd / entry_price if entry_price > 0 else 0.0
+
             if position_usd < self.min_position_usd:
                 continue
 

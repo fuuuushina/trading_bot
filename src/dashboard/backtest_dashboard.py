@@ -26,15 +26,17 @@ from config.loader import get_risk_config, get_settings, get_strategy_config
 from src.backtesting.backtester import Backtester, BacktestResult
 from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
 from src.strategies.breakout import BreakoutStrategy
-from src.strategies.dca import DCAStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
+from src.strategies.tactical_dca import TacticalDCAStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
+from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.volatility_compression import VolatilityCompressionStrategy
 
 
 STRATEGY_ORDER = [
-    "dca_etf",
+    "tactical_dca",
+    "true_dca",
     "breakout",
     "trend_following",
     "mean_reversion",
@@ -43,7 +45,8 @@ STRATEGY_ORDER = [
 ]
 
 CHART_COLORS = {
-    "dca_etf": "#2563eb",
+    "tactical_dca": "#2563eb",
+    "true_dca": "#0b84a5",
     "breakout": "#059669",
     "trend_following": "#d97706",
     "mean_reversion": "#dc2626",
@@ -75,7 +78,8 @@ def strategy_registry(overrides: dict[str, Any] | None = None) -> dict[str, Any]
         "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
         "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
         "breakout": BreakoutStrategy(scfg.get("breakout", {})),
-        "dca_etf": DCAStrategy(scfg.get("dca_etf", {})),
+        "tactical_dca": TacticalDCAStrategy(scfg.get("tactical_dca", {})),
+        "true_dca": TrueDCAStrategy(scfg.get("true_dca", {})),
         "momentum": MomentumStrategy(scfg.get("momentum", {})),
         "volatility_compression": VolatilityCompressionStrategy(
             scfg.get("volatility_compression", {})
@@ -86,7 +90,7 @@ def strategy_registry(overrides: dict[str, Any] | None = None) -> dict[str, Any]
 def enabled_strategy_names() -> list[str]:
     scfg = get_strategy_config().get("strategies", {})
     enabled = [name for name in STRATEGY_ORDER if scfg.get(name, {}).get("enabled", False)]
-    return enabled or ["dca_etf"]
+    return enabled or ["tactical_dca"]
 
 
 def build_backtester(risk_override: dict[str, Any] | None = None) -> Backtester:
@@ -529,11 +533,11 @@ def create_app() -> Dash:
                     html.Div("Paramètres dynamiques (JSON)", className="field-label"),
                     dcc.Textarea(
                         id="config-overrides",
-                        value='{"strategies": {"dca_etf": {"buy_day_of_month": 1}}, "risk": {"position_sizing": {"fixed_risk_pct": 0.005}}}',
+                        value='{"strategies": {"tactical_dca": {"buy_day_of_month": 1}}, "risk": {"position_sizing": {"fixed_risk_pct": 0.005}}}',
                         style={"width": "100%", "height": "120px", "fontFamily": "Courier New, monospace", "fontSize": "12px"},
                     ),
                     html.Div(
-                        "Exemple: {\"strategies\": {\"dca_etf\": {\"dip_threshold_pct\": -0.05}}, \"risk\": {\"position_sizing\": {\"fixed_risk_pct\": 0.01}}}",
+                        "Exemple: {\"strategies\": {\"tactical_dca\": {\"dip_threshold_pct\": -0.05}}, \"risk\": {\"position_sizing\": {\"fixed_risk_pct\": 0.01}}}",
                         style={"marginTop": "8px", "color": "#475569", "fontSize": "12px"},
                     ),
                 ],

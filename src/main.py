@@ -49,7 +49,8 @@ def run_backtest(ticker: str, strategy_name: str) -> None:
     from src.strategies.trend_following import TrendFollowingStrategy
     from src.strategies.mean_reversion import MeanReversionStrategy
     from src.strategies.breakout import BreakoutStrategy
-    from src.strategies.dca import DCAStrategy
+    from src.strategies.tactical_dca import TacticalDCAStrategy
+    from src.strategies.true_dca import TrueDCAStrategy
     from src.strategies.momentum import MomentumStrategy
     from src.strategies.volatility_compression import VolatilityCompressionStrategy
 
@@ -60,7 +61,8 @@ def run_backtest(ticker: str, strategy_name: str) -> None:
         "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
         "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
         "breakout": BreakoutStrategy(scfg.get("breakout", {})),
-        "dca_etf": DCAStrategy(scfg.get("dca_etf", {})),
+        "tactical_dca": TacticalDCAStrategy(scfg.get("tactical_dca", {})),
+        "true_dca": TrueDCAStrategy(scfg.get("true_dca", {})),
         "momentum": MomentumStrategy(scfg.get("momentum", {})),
         "volatility_compression": VolatilityCompressionStrategy(
             scfg.get("volatility_compression", {})

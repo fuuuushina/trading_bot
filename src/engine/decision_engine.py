@@ -28,8 +28,9 @@ from src.risk.risk_manager import KillSwitchTriggered, RiskDecision, RiskManager
 from src.rules.rules_engine import RulesEngine, RulesVerdict
 from src.strategies.base import Horizon, Signal, SignalType
 from src.strategies.breakout import BreakoutStrategy
-from src.strategies.dca import DCAStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
+from src.strategies.tactical_dca import TacticalDCAStrategy
+from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,8 @@ class DecisionEngine:
             "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
             "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
             "breakout": BreakoutStrategy(scfg.get("breakout", {})),
-            "dca_etf": DCAStrategy(scfg.get("dca_etf", {})),
+            "tactical_dca": TacticalDCAStrategy(scfg.get("tactical_dca", {})),
+            "true_dca": TrueDCAStrategy(scfg.get("true_dca", {})),
         }
 
     # ------------------------------------------------------------------ #
