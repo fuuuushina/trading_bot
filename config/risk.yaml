@@ -1,0 +1,81 @@
+# ============================================================
+# TRADING BOT - RISK PARAMETERS
+# ============================================================
+# All values are hard limits — the Risk Manager enforces them
+# regardless of any signal, AI, or strategy instruction.
+
+risk:
+  # ---- Per-trade risk ----
+  max_risk_per_trade_pct: 0.005    # 0.5% of capital per trade
+  min_risk_reward_ratio: 1.5       # Minimum R:R to accept trade
+  max_leverage: 1.0                # No leverage — spot only
+
+  # ---- Daily / weekly / monthly loss limits ----
+  max_daily_loss_pct: 0.01         # 1%
+  max_weekly_loss_pct: 0.03        # 3%
+  max_monthly_drawdown_pct: 0.06   # 6%
+  max_total_drawdown_pct: 0.15     # 15% — triggers defensive mode
+
+  # ---- Exposure limits ----
+  max_total_exposure_pct: 0.80     # 80% max invested
+  min_cash_reserve_pct: 0.10       # Always keep 10% cash
+  max_intraday_allocation_pct: 0.10
+  max_swing_allocation_pct: 0.20
+  max_long_term_allocation_pct: 0.90
+
+  # ---- Position limits ----
+  max_open_positions: 15
+  max_positions_per_strategy: 3
+  max_exposure_per_asset_pct: 0.10    # 10% max in a single asset
+  max_exposure_per_sector_pct: 0.25   # 25% max per sector
+
+  # ---- Correlation ----
+  max_correlation_exposure: 0.70      # Block if portfolio correlation > 0.70
+
+  # ---- Intraday specific ----
+  intraday:
+    max_consecutive_losses: 3
+    max_daily_trades: 10
+    stop_after_daily_loss_pct: 0.005  # 0.5% intraday daily loss
+    min_volume_intraday: 1000000
+    max_spread_pct: 0.002             # 0.2%
+
+  # ---- Swing specific ----
+  swing:
+    max_consecutive_losses: 4
+    min_days_between_same_asset: 2
+
+  # ---- Long term specific ----
+  long_term:
+    min_holding_days: 5
+    max_rebalance_frequency_days: 30
+
+# ---- Kill Switch triggers ----
+kill_switch:
+  daily_loss_pct: 0.01
+  weekly_loss_pct: 0.03
+  monthly_drawdown_pct: 0.06
+  max_api_errors_per_hour: 10
+  max_data_gap_minutes: 15
+  max_latency_ms: 5000
+  max_consecutive_blocked_trades: 10
+  # If triggered, how long to stay halted (minutes). 0 = manual restart only.
+  halt_duration_minutes: 0   # 0 = manual restart required
+
+# ---- Defensive mode ----
+defensive_mode:
+  # Triggered when conditions deteriorate — reduces exposure automatically
+  trigger_drawdown_pct: 0.05
+  max_exposure_pct: 0.40
+  intraday_enabled: false
+  swing_enabled: true
+  long_term_enabled: true
+  auto_exit_losing_swing: true
+
+# ---- Position sizing defaults ----
+position_sizing:
+  method: "fixed_fractional"   # fixed_fractional | kelly | equal_weight
+  kelly_fraction: 0.25          # Conservative Kelly (quarter-Kelly)
+  fixed_risk_pct: 0.005
+  min_position_usd: 100.0
+  max_position_usd: 10000.0

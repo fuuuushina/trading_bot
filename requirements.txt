@@ -1,0 +1,37 @@
+# ============================================================
+# Trading Bot — Python Dependencies
+# ============================================================
+
+# Core data
+pandas>=2.0.0
+numpy>=1.24.0
+yfinance>=0.2.40
+
+# Technical analysis (backup / cross-validation)
+# ta-lib is optional — install separately if needed
+
+# Configuration
+pyyaml>=6.0
+
+# AI / API
+anthropic>=0.25.0
+
+# HTTP
+requests>=2.31.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Monitoring / Dashboard (optional)
+# dash>=2.14.0
+# plotly>=5.18.0
+
+# Scheduling (for production loop)
+schedule>=1.2.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Logging
+structlog>=23.1.0

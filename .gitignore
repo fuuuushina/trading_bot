@@ -1,0 +1,49 @@
+# ============================================================
+# .gitignore — CRITICAL for security
+# ============================================================
+
+# Never commit secrets
+.env
+*.env
+secrets/
+
+# Data and cache (can be large)
+data/cache/
+data/logs/
+data/reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
