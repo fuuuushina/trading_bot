@@ -1,0 +1,64 @@
+{
+  "initial_capital": 500.0,
+  "equity_history": [
+    {
+      "time": "2026-06-05 11:58:46 ET",
+      "equity": 500.0
+    },
+    {
+      "time": "2026-06-05 11:59:46 ET",
+      "equity": 499.99
+    },
+    {
+      "time": "2026-06-05 12:00:47 ET",
+      "equity": 499.86
+    },
+    {
+      "time": "2026-06-05 12:01:03 ET",
+      "equity": 499.79
+    },
+    {
+      "time": "2026-06-05 12:02:03 ET",
+      "equity": 499.81
+    }
+  ],
+  "signals_log": [
+    {
+      "time": "2026-06-05 11:58:46 ET",
+      "ticker": "SPY",
+      "strategy": "rsi_dip_buyer",
+      "signal": "BUY",
+      "price": 746.72,
+      "reason": "RSI(2)=13.6 [dip] while price > SMA200=682. Regime=bull_trend."
+    },
+    {
+      "time": "2026-06-05 11:59:46 ET",
+      "ticker": "QQQ",
+      "strategy": "rsi_dip_buyer",
+      "signal": "BUY",
+      "price": 721.09,
+      "reason": "RSI(2)=4.2 [extreme_dip] while price > SMA200=621. Regime=bull_trend."
+    }
+  ],
+  "targets": {
+    "SPY": {
+      "strategy": "rsi_dip_buyer",
+      "quantity": 0.133785,
+      "entry_price": 747.4667,
+      "entry_time": "2026-06-05 11:58:46 ET",
+      "stop_loss": 737.1435,
+      "take_profit": 762.6807,
+      "order_id": "72776f63-96af-4d0a-b9ab-f7bb1ff0123b"
+    },
+    "QQQ": {
+      "strategy": "rsi_dip_buyer",
+      "quantity": 0.13854,
+      "entry_price": 721.8111,
+      "entry_time": "2026-06-05 11:59:46 ET",
+      "stop_loss": 705.1289,
+      "take_profit": 747.6918,
+      "order_id": "b99d03cb-d02b-442e-a34c-1741c5c3bf81"
+    }
+  },
+  "closed_events": []
+}

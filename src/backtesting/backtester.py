@@ -46,6 +46,7 @@ class BacktestTrade:
     commission: float = 0.0
     exit_reason: str = ""
     regime_at_entry: str = ""
+    horizon_pnl_pct: Optional[float] = None  # 1-year forward return (DCA only)
 
 
 @dataclass
@@ -249,11 +250,13 @@ class Backtester:
 
             max_exposure_pct = metadata.get("max_exposure_pct")
             if max_exposure_pct is not None:
-                current_position_value = sum(
-                    t.quantity * entry_price for t in open_trades if t.asset == asset
+                # DCA: cap is on COST BASIS vs initial capital, not market value vs current capital.
+                # Using market value would block new buys as positions appreciate — defeating DCA.
+                cost_basis = sum(
+                    t.quantity * t.entry_price for t in open_trades if t.asset == asset
                 )
-                max_allowed_value = capital * float(max_exposure_pct)
-                remaining_allowed_value = max_allowed_value - current_position_value
+                max_allowed_value = self.initial_capital * float(max_exposure_pct)
+                remaining_allowed_value = max_allowed_value - cost_basis
                 position_usd = min(position_usd, max(0.0, remaining_allowed_value))
                 quantity = position_usd / entry_price if entry_price > 0 else 0.0
 
@@ -287,6 +290,11 @@ class Backtester:
             cash, closed_trade = self._close_trade(
                 open_trade, final_price, n - 1, "end_of_backtest", cash
             )
+            # 1-year forward return: was this entry profitable 252 bars later?
+            yr1_bar = open_trade.entry_bar + 252
+            if yr1_bar < n:
+                yr1_price = float(df.iloc[yr1_bar]["close"])
+                closed_trade.horizon_pnl_pct = round((yr1_price / open_trade.entry_price) - 1, 4)
             trades.append(closed_trade)
 
         final_capital = cash

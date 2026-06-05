@@ -58,7 +58,13 @@ market_hours:
 # ---- Broker ----
 broker:
   paper:
+    provider: "alpaca"             # local | alpaca
     initial_capital: 500.0
+    execution_enabled: true        # Alpaca PAPER orders only
+    min_position_usd: 10.0
+    max_position_usd: 100.0
+    watchlist: ["SPY", "QQQ"]
+    refresh_seconds: 60
     commission_per_trade: 0.0       # flat fee USD
     commission_pct: 0.0             # 0 = flat only
     slippage_pct: 0.001             # 0.1%

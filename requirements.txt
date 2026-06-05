@@ -15,6 +15,7 @@ pyyaml>=6.0
 
 # AI / API
 anthropic>=0.25.0
+alpaca-py>=0.30.0
 
 # HTTP
 requests>=2.31.0

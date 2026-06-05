@@ -46,27 +46,19 @@ def run_backtest(ticker: str, strategy_name: str) -> None:
     from src.backtesting.backtester import Backtester
     from src.features.indicators import compute_all_features
     from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
-    from src.strategies.trend_following import TrendFollowingStrategy
-    from src.strategies.mean_reversion import MeanReversionStrategy
     from src.strategies.breakout import BreakoutStrategy
-    from src.strategies.tactical_dca import TacticalDCAStrategy
+    from src.strategies.rsi_dip_buyer import RSIDipBuyerStrategy
+    from src.strategies.trend_following import TrendFollowingStrategy
     from src.strategies.true_dca import TrueDCAStrategy
-    from src.strategies.momentum import MomentumStrategy
-    from src.strategies.volatility_compression import VolatilityCompressionStrategy
 
     strategy_cfg = get_strategy_config()
     scfg = strategy_cfg.get("strategies", {})
 
     strategies = {
+        "true_dca":        TrueDCAStrategy(scfg.get("true_dca", {})),
         "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
-        "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
-        "breakout": BreakoutStrategy(scfg.get("breakout", {})),
-        "tactical_dca": TacticalDCAStrategy(scfg.get("tactical_dca", {})),
-        "true_dca": TrueDCAStrategy(scfg.get("true_dca", {})),
-        "momentum": MomentumStrategy(scfg.get("momentum", {})),
-        "volatility_compression": VolatilityCompressionStrategy(
-            scfg.get("volatility_compression", {})
-        ),
+        "breakout":        BreakoutStrategy(scfg.get("breakout", {})),
+        "rsi_dip_buyer":   RSIDipBuyerStrategy(scfg.get("rsi_dip_buyer", {})),
     }
 
     if strategy_name not in strategies:

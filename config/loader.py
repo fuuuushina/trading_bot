@@ -10,9 +10,13 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 
 
 CONFIG_DIR = Path(__file__).parent
+PROJECT_ROOT = CONFIG_DIR.parent
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 def _load_yaml(filename: str) -> dict[str, Any]:

@@ -45,13 +45,14 @@ def compute_metrics(
     metrics["cagr_pct"] = round(cagr, 4)
 
     # ---- Sharpe Ratio ----
-    if len(daily_returns) > 1:
+    if len(daily_returns) > 1 and daily_returns.std() > 1e-8:
         daily_rf = risk_free_rate / 252
         excess = daily_returns - daily_rf
-        sharpe = (excess.mean() / (excess.std() + 1e-10)) * np.sqrt(252)
+        sharpe = (excess.mean() / excess.std()) * np.sqrt(252)
         metrics["sharpe_ratio"] = round(float(sharpe), 4)
     else:
-        metrics["sharpe_ratio"] = 0.0
+        # Flat equity (0 trades or no movement) — Sharpe undefined
+        metrics["sharpe_ratio"] = None
 
     # ---- Sortino Ratio ----
     downside = daily_returns[daily_returns < 0]
@@ -140,6 +141,20 @@ def compute_metrics(
             if t.exit_bar is not None
         ]
         metrics["avg_trade_duration_bars"] = round(np.mean(durations) if durations else 0, 1)
+
+        # Horizon win rate: % of entries profitable 1 year later (DCA strategies)
+        horizon_pcts = [
+            getattr(t, "horizon_pnl_pct", None)
+            for t in trades
+            if getattr(t, "horizon_pnl_pct", None) is not None
+        ]
+        if horizon_pcts:
+            h_wins = sum(1 for p in horizon_pcts if p > 0)
+            metrics["horizon_win_rate_pct"] = round(h_wins / len(horizon_pcts) * 100, 2)
+            metrics["horizon_total"] = len(horizon_pcts)
+        else:
+            metrics["horizon_win_rate_pct"] = None
+            metrics["horizon_total"] = 0
 
     # ---- vs Buy & Hold ----
     metrics["buy_and_hold_return_pct"] = round(bah_return_pct, 4)

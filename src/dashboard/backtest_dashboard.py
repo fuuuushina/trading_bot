@@ -7,7 +7,6 @@ Run:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -22,50 +21,72 @@ from config.loader import get_risk_config, get_settings, get_strategy_config
 from src.backtesting.backtester import Backtester, BacktestResult
 from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
 from src.strategies.breakout import BreakoutStrategy
-from src.strategies.mean_reversion import MeanReversionStrategy
-from src.strategies.momentum import MomentumStrategy
-from src.strategies.tactical_dca import TacticalDCAStrategy
+from src.strategies.rsi_dip_buyer import RSIDipBuyerStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
 from src.strategies.true_dca import TrueDCAStrategy
-from src.strategies.volatility_compression import VolatilityCompressionStrategy
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-
 STRATEGY_ORDER = [
-    "tactical_dca",
-    "true_dca",
-    "breakout",
-    "trend_following",
-    "mean_reversion",
-    "momentum",
-    "volatility_compression",
+    "true_dca", "trend_following", "breakout", "rsi_dip_buyer",
 ]
 
 CHART_COLORS = {
-    "tactical_dca": "#2563eb",
-    "true_dca": "#0b84a5",
-    "breakout": "#059669",
+    "true_dca":        "#0b84a5",
     "trend_following": "#d97706",
-    "mean_reversion": "#dc2626",
-    "momentum": "#7c3aed",
-    "volatility_compression": "#0891b2",
-    "buy_hold": "#111827",
+    "breakout":        "#059669",
+    "rsi_dip_buyer":   "#7c3aed",
+    "buy_hold":        "#374151",
 }
 
+DCA_STRATEGIES = {"true_dca"}
+
+# ── Parameter definitions ─────────────────────────────────────────────────────
+
+STRATEGY_PARAMS: dict[str, list[dict[str, Any]]] = {
+    "true_dca": [
+        {"key": "monthly_size_pct",     "label": "Taille mensuelle",  "min": 0.005, "max": 0.10,  "step": 0.005, "default": 0.022, "unit": "%", "scale": 100},
+        {"key": "dip_size_pct",         "label": "Taille sur dip",    "min": 0.005, "max": 0.15,  "step": 0.005, "default": 0.033, "unit": "%", "scale": 100},
+        {"key": "dip_threshold_pct",    "label": "Seuil dip",         "min": -0.20, "max": -0.01, "step": 0.005, "default": -0.05, "unit": "%", "scale": 100},
+        {"key": "max_exposure_pct",     "label": "Exposition max",    "min": 0.50,  "max": 1.0,   "step": 0.05,  "default": 0.90,  "unit": "%", "scale": 100},
+        {"key": "min_cash_reserve_pct", "label": "Réserve cash",      "min": 0.02,  "max": 0.20,  "step": 0.02,  "default": 0.05,  "unit": "%", "scale": 100},
+    ],
+    "trend_following": [
+        {"key": "min_adx",           "label": "ADX minimum",        "min": 15,  "max": 40,   "step": 5,    "default": 25,  "unit": "",  "scale": 1},
+        {"key": "atr_multiplier_sl", "label": "Stop Loss (×ATR)",   "min": 1.0, "max": 4.0,  "step": 0.25, "default": 2.0, "unit": "×", "scale": 1},
+        {"key": "atr_multiplier_tp", "label": "Take Profit (×ATR)", "min": 2.0, "max": 10.0, "step": 0.5,  "default": 3.5, "unit": "×", "scale": 1},
+    ],
+    "breakout": [
+        {"key": "lookback_period",   "label": "Lookback (jours)",    "min": 5,   "max": 60,  "step": 5,    "default": 20,  "unit": "j", "scale": 1},
+        {"key": "atr_multiplier_sl", "label": "Stop Loss (×ATR)",    "min": 0.5, "max": 3.0, "step": 0.25, "default": 1.5, "unit": "×", "scale": 1},
+        {"key": "atr_multiplier_tp", "label": "Take Profit (×ATR)",  "min": 1.0, "max": 8.0, "step": 0.5,  "default": 3.0, "unit": "×", "scale": 1},
+    ],
+    "rsi_dip_buyer": [
+        {"key": "rsi2_entry_threshold",  "label": "RSI(2) seuil entrée", "min": 5.0, "max": 25.0, "step": 1.0,  "default": 15.0, "unit": "",  "scale": 1},
+        {"key": "rsi2_strong_threshold", "label": "RSI(2) extrême",      "min": 2.0, "max": 15.0, "step": 1.0,  "default":  8.0, "unit": "",  "scale": 1},
+        {"key": "position_size_pct",     "label": "Taille position",     "min": 0.10, "max": 0.50, "step": 0.05, "default":  0.25, "unit": "%", "scale": 100},
+        {"key": "atr_multiplier_sl",     "label": "Stop Loss (×ATR)",    "min": 0.5, "max": 3.0,  "step": 0.25, "default":  1.5, "unit": "×", "scale": 1},
+        {"key": "atr_multiplier_tp",     "label": "Take Profit (×ATR)",  "min": 1.0, "max": 6.0,  "step": 0.5,  "default":  2.5, "unit": "×", "scale": 1},
+    ],
+}
+
+ALL_SLIDER_IDS = [
+    f"sl-{s}-{p['key']}"
+    for s in STRATEGY_ORDER
+    for p in STRATEGY_PARAMS.get(s, [])
+]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def merge_dicts(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     merged = {**base}
-    for key, value in overrides.items():
-        if (
-            key in merged
-            and isinstance(merged[key], dict)
-            and isinstance(value, dict)
-        ):
-            merged[key] = merge_dicts(merged[key], value)
+    for k, v in overrides.items():
+        if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
+            merged[k] = merge_dicts(merged[k], v)
         else:
-            merged[key] = value
+            merged[k] = v
     return merged
 
 
@@ -74,22 +95,17 @@ def strategy_registry(overrides: dict[str, Any] | None = None) -> dict[str, Any]
     if overrides:
         scfg = merge_dicts(scfg, overrides)
     return {
+        "true_dca":        TrueDCAStrategy(scfg.get("true_dca", {})),
         "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
-        "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
-        "breakout": BreakoutStrategy(scfg.get("breakout", {})),
-        "tactical_dca": TacticalDCAStrategy(scfg.get("tactical_dca", {})),
-        "true_dca": TrueDCAStrategy(scfg.get("true_dca", {})),
-        "momentum": MomentumStrategy(scfg.get("momentum", {})),
-        "volatility_compression": VolatilityCompressionStrategy(
-            scfg.get("volatility_compression", {})
-        ),
+        "breakout":        BreakoutStrategy(scfg.get("breakout", {})),
+        "rsi_dip_buyer":   RSIDipBuyerStrategy(scfg.get("rsi_dip_buyer", {})),
     }
 
 
 def enabled_strategy_names() -> list[str]:
     scfg = get_strategy_config().get("strategies", {})
-    enabled = [name for name in STRATEGY_ORDER if scfg.get(name, {}).get("enabled", False)]
-    return enabled or ["tactical_dca"]
+    enabled = [n for n in STRATEGY_ORDER if scfg.get(n, {}).get("enabled", False)]
+    return enabled or ["true_dca"]
 
 
 def build_backtester(risk_override: dict[str, Any] | None = None) -> Backtester:
@@ -123,10 +139,10 @@ def download_prices(ticker: str, start_date: str, end_date: str) -> pd.DataFrame
     )
     df = normalize_yfinance_columns(df)
     if df.empty:
-        raise ValueError(f"No market data returned for {ticker}.")
+        raise ValueError(f"Pas de données pour {ticker}.")
     missing = {"open", "high", "low", "close", "volume"} - set(df.columns)
     if missing:
-        raise ValueError(f"Missing columns from data: {', '.join(sorted(missing))}.")
+        raise ValueError(f"Colonnes manquantes: {', '.join(sorted(missing))}.")
     return df
 
 
@@ -136,9 +152,9 @@ def run_selected_backtests(
     strategy_names: list[str],
     config_overrides: dict[str, Any] | None = None,
 ) -> list[BacktestResult]:
-    strategies_override = config_overrides.get("strategies") if config_overrides else None
+    strat_override = config_overrides.get("strategies") if config_overrides else None
     risk_override = config_overrides.get("risk") if config_overrides else None
-    registry = strategy_registry(strategies_override)
+    registry = strategy_registry(strat_override)
     results: list[BacktestResult] = []
     for name in strategy_names:
         if name not in registry:
@@ -167,643 +183,591 @@ def result_equity_after_warmup(result: BacktestResult) -> pd.Series:
     return result.equity_curve.loc[result.equity_curve.index >= start]
 
 
-def make_empty_figure(title: str) -> go.Figure:
-    fig = go.Figure()
-    fig.update_layout(
-        title=title,
-        template="plotly_white",
-        height=390,
-        margin={"l": 54, "r": 24, "t": 54, "b": 42},
-        font={"family": "Inter, Segoe UI, Arial", "size": 12},
-        xaxis={"showgrid": False},
-        yaxis={"gridcolor": "#e5e7eb"},
-    )
-    return fig
-
-
-def make_equity_figure(df: pd.DataFrame, results: list[BacktestResult]) -> go.Figure:
-    fig = make_empty_figure("Courbes equity")
-    if not results:
-        return fig
-
-    for result in results:
-        equity = result_equity_after_warmup(result)
-        fig.add_trace(
-            go.Scatter(
-                x=equity.index,
-                y=equity.values,
-                mode="lines",
-                line={"width": 2.4, "color": CHART_COLORS.get(result.strategy_name)},
-                name=result.strategy_name,
-            )
-        )
-
-    bah = buy_and_hold_curve(df, results[0])
-    if not bah.empty:
-        fig.add_trace(
-            go.Scatter(
-                x=bah.index,
-                y=bah.values,
-                mode="lines",
-                line={"width": 1.8, "dash": "dash", "color": CHART_COLORS["buy_hold"]},
-                name="buy_hold",
-            )
-        )
-
-    fig.update_layout(legend={"orientation": "h", "y": 1.1, "x": 0})
-    fig.update_yaxes(title_text="Capital")
-    return fig
-
-
-def make_drawdown_figure(results: list[BacktestResult]) -> go.Figure:
-    fig = make_empty_figure("Drawdown")
-    for result in results:
-        equity = result_equity_after_warmup(result)
-        dd = drawdown_curve(equity)
-        fig.add_trace(
-            go.Scatter(
-                x=dd.index,
-                y=dd.values,
-                mode="lines",
-                fill="tozeroy",
-                line={"width": 1.8, "color": CHART_COLORS.get(result.strategy_name)},
-                name=result.strategy_name,
-            )
-        )
-    fig.update_layout(legend={"orientation": "h", "y": 1.1, "x": 0})
-    fig.update_yaxes(title_text="%")
-    return fig
-
-
-def metric_rows(results: list[BacktestResult]) -> list[dict[str, Any]]:
-    rows = []
-    for result in results:
-        m = result.metrics
-        rows.append(
-            {
-                "strategy": result.strategy_name,
-                "initial": round(result.initial_capital, 2),
-                "final": round(result.final_capital, 2),
-                "return_pct": round(m.get("total_return_pct", 0.0), 2),
-                "sharpe": round(m.get("sharpe_ratio", 0.0), 3),
-                "max_dd_pct": round(m.get("max_drawdown_pct", 0.0), 2),
-                "trades": m.get("total_trades", 0),
-                "win_rate_pct": round(m.get("win_rate_pct", 0.0), 1),
-                "profit_factor": round(m.get("profit_factor", 0.0), 3),
-                "vs_bh_pct": round(m.get("vs_buy_and_hold_pct", 0.0), 2),
-        "avg_position_size": round(m.get("avg_position_size", 0.0), 2),
-        "total_invested": round(m.get("total_invested", 0.0), 2),
-            }
-        )
-    return rows
-
-
-def trade_rows(df: pd.DataFrame, results: list[BacktestResult]) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for result in results:
-        for trade in result.trades:
-            entry_date = ""
-            exit_date = ""
-            if trade.entry_bar < len(df.index):
-                entry_date = str(df.index[trade.entry_bar].date())
-            if trade.exit_bar is not None and trade.exit_bar < len(df.index):
-                exit_date = str(df.index[trade.exit_bar].date())
-            rows.append(
-                {
-                    "strategy": result.strategy_name,
-                    "side": trade.side,
-                    "entry_date": entry_date,
-                    "exit_date": exit_date,
-                    "entry": round(trade.entry_price, 4),
-                    "exit": round(trade.exit_price or 0.0, 4),
-                    "qty": round(trade.quantity, 4),
-                    "pnl": round(trade.pnl, 2),
-                    "pnl_pct": round(trade.pnl_pct * 100, 2),
-                    "reason": trade.exit_reason,
-                }
-            )
-    return rows
-
-
 def compute_trade_stats(result: BacktestResult) -> dict[str, float]:
     buy_sizes = [t.quantity * t.entry_price for t in result.trades if t.side == "long"]
     total_invested = sum(buy_sizes)
     return {
         "avg_position_size": round(total_invested / len(buy_sizes), 2) if buy_sizes else 0.0,
-        "max_position_size": round(max(buy_sizes), 2) if buy_sizes else 0.0,
         "total_invested": round(total_invested, 2),
     }
 
 
-def metric_cards(results: list[BacktestResult]) -> list[Any]:
+def _win_rate_display(result: BacktestResult) -> str:
+    m = result.metrics
+    h = m.get("horizon_win_rate_pct")
+    n = m.get("horizon_total", 0)
+    if result.strategy_name in DCA_STRATEGIES and h is not None:
+        return f"{h:.0f}% (1A/{n})"
+    v = m.get("win_rate_pct", 0.0)
+    return f"{v:.1f}%" if v else "—"
+
+
+# ── Chart builders ────────────────────────────────────────────────────────────
+
+def _empty_fig(title: str) -> go.Figure:
+    fig = go.Figure()
+    fig.update_layout(
+        title=title, template="plotly_white", height=340,
+        margin={"l": 50, "r": 16, "t": 44, "b": 36},
+        font={"family": "Inter, system-ui, sans-serif", "size": 12},
+        xaxis={"showgrid": False},
+        yaxis={"gridcolor": "#e5e7eb"},
+        plot_bgcolor="#fff",
+        paper_bgcolor="#fff",
+    )
+    return fig
+
+
+def make_equity_figure(df: pd.DataFrame, results: list[BacktestResult]) -> go.Figure:
+    fig = _empty_fig("Courbes equity")
+    for r in results:
+        eq = result_equity_after_warmup(r)
+        fig.add_trace(go.Scatter(
+            x=eq.index, y=eq.values, mode="lines",
+            line={"width": 2, "color": CHART_COLORS.get(r.strategy_name, "#888")},
+            name=r.strategy_name,
+        ))
+    if results:
+        bah = buy_and_hold_curve(df, results[0])
+        if not bah.empty:
+            fig.add_trace(go.Scatter(
+                x=bah.index, y=bah.values, mode="lines",
+                line={"width": 1.5, "dash": "dash", "color": CHART_COLORS["buy_hold"]},
+                name="buy & hold",
+            ))
+    fig.update_layout(legend={"orientation": "h", "y": 1.12, "x": 0, "font": {"size": 11}})
+    fig.update_yaxes(title_text="Capital ($)")
+    return fig
+
+
+def _hex_to_rgba(hex_color: str, alpha: float = 0.18) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def make_drawdown_figure(results: list[BacktestResult]) -> go.Figure:
+    fig = _empty_fig("Drawdown")
+    for r in results:
+        eq = result_equity_after_warmup(r)
+        dd = drawdown_curve(eq)
+        color = CHART_COLORS.get(r.strategy_name, "#888888")
+        fig.add_trace(go.Scatter(
+            x=dd.index, y=dd.values, mode="lines", fill="tozeroy",
+            line={"width": 1.5, "color": color},
+            fillcolor=_hex_to_rgba(color),
+            name=r.strategy_name,
+        ))
+    fig.update_layout(legend={"orientation": "h", "y": 1.12, "x": 0, "font": {"size": 11}})
+    fig.update_yaxes(title_text="%")
+    return fig
+
+
+# ── Metric rows / cards ───────────────────────────────────────────────────────
+
+def metric_rows(results: list[BacktestResult]) -> list[dict[str, Any]]:
+    rows = []
+    for r in results:
+        m = r.metrics
+        rows.append({
+            "strategie":    r.strategy_name,
+            "initial":      f"${r.initial_capital:,.0f}",
+            "final":        f"${r.final_capital:,.2f}",
+            "return_pct":   f"{m.get('total_return_pct', 0):.2f}%",
+            "cagr":         f"{m.get('cagr_pct', 0):.2f}%",
+            "sharpe":       f"{m.get('sharpe_ratio', 0) or 0:.3f}",
+            "max_dd":       f"{m.get('max_drawdown_pct', 0):.2f}%",
+            "trades":       m.get("total_trades", 0),
+            "win_rate":     _win_rate_display(r),
+            "pf":           f"{m.get('profit_factor', 0):.2f}" if m.get("profit_factor") != float("inf") else "∞",
+            "vs_bh":        f"{m.get('vs_buy_and_hold_pct', 0):+.2f}%",
+            "total_invest": f"${m.get('total_invested', 0):,.2f}",
+        })
+    return rows
+
+
+def trade_rows(df: pd.DataFrame, results: list[BacktestResult]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for r in results:
+        for t in r.trades:
+            entry_date = str(df.index[t.entry_bar].date()) if t.entry_bar < len(df.index) else ""
+            exit_date  = str(df.index[t.exit_bar].date())  if t.exit_bar  is not None and t.exit_bar < len(df.index) else ""
+            rows.append({
+                "strategie":  r.strategy_name,
+                "side":       t.side,
+                "entry_date": entry_date,
+                "exit_date":  exit_date,
+                "entry":      round(t.entry_price, 2),
+                "exit":       round(t.exit_price or 0.0, 2),
+                "qty":        round(t.quantity, 4),
+                "pnl":        round(t.pnl, 2),
+                "pnl_pct":    f"{t.pnl_pct * 100:.2f}%",
+                "raison":     t.exit_reason,
+            })
+    return rows
+
+
+def summary_cards(results: list[BacktestResult]) -> list[Any]:
     if not results:
         return []
-    best = max(results, key=lambda r: r.metrics.get("total_return_pct", -9999))
-    worst_dd = min(r.metrics.get("max_drawdown_pct", 0.0) for r in results)
-    total_trades = sum(int(r.metrics.get("total_trades", 0)) for r in results)
+    best    = max(results, key=lambda r: r.metrics.get("total_return_pct", -9999))
+    worst   = min(r.metrics.get("max_drawdown_pct", 0.0) for r in results)
+    n_total = sum(int(r.metrics.get("total_trades", 0)) for r in results)
     capital = results[0].initial_capital
-    cards = [
-        ("Capital", f"${capital:,.2f}"),
-        ("Meilleur return", f"{best.strategy_name} {best.metrics.get('total_return_pct', 0):.2f}%"),
-        ("Max DD", f"{worst_dd:.2f}%"),
-        ("Trades", str(total_trades)),
+    items = [
+        ("Capital", f"${capital:,.0f}"),
+        ("Meilleur return", f"{best.strategy_name}  {best.metrics.get('total_return_pct', 0):.1f}%"),
+        ("Max Drawdown",    f"{worst:.2f}%"),
+        ("Total trades",    str(n_total)),
     ]
     return [
-        html.Div(
-            [html.Div(label, className="metric-label"), html.Div(value, className="metric-value")],
-            className="metric-card",
-        )
-        for label, value in cards
+        html.Div([
+            html.Div(lbl, className="kpi-label"),
+            html.Div(val, className="kpi-value"),
+        ], className="kpi-card")
+        for lbl, val in items
     ]
 
 
+# ── Slider builders ───────────────────────────────────────────────────────────
+
+def _slider_marks(p: dict[str, Any]) -> dict:
+    lo, hi, sc, unit = p["min"], p["max"], p["scale"], p["unit"]
+    steps = 4
+    span = hi - lo
+    marks = {}
+    for i in range(steps + 1):
+        v = round(lo + i * span / steps, 4)
+        disp_v = round(v * sc, 1)
+        marks[v] = f"{disp_v}{unit}"
+    return marks
+
+
+def _build_param_panel(strategy_name: str) -> html.Div:
+    params = STRATEGY_PARAMS.get(strategy_name, [])
+    if not params:
+        return html.Div(
+            f"Aucun paramètre configurable pour {strategy_name}.",
+            style={"color": "#94a3b8", "padding": "16px 0", "fontSize": "13px"},
+        )
+    rows = []
+    for p in params:
+        slider_id = f"sl-{strategy_name}-{p['key']}"
+        sc, unit = p["scale"], p["unit"]
+        disp_val = round(p["default"] * sc, 1)
+        rows.append(html.Div([
+            html.Div([
+                html.Span(p["label"], className="slider-label"),
+                html.Span(
+                    f"{disp_val}{unit}",
+                    id=f"val-{strategy_name}-{p['key']}",
+                    className="slider-value",
+                ),
+            ], className="slider-header"),
+            dcc.Slider(
+                id=slider_id,
+                min=p["min"], max=p["max"], step=p["step"],
+                value=p["default"],
+                marks=_slider_marks(p),
+                tooltip={"placement": "bottom", "always_visible": False},
+                className="param-slider",
+            ),
+        ], className="slider-row"))
+    rows.append(html.Button(
+        "Réinitialiser", id=f"reset-{strategy_name}",
+        className="reset-btn",
+    ))
+    return html.Div(rows)
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+
 def create_app() -> Dash:
-    default_start = (date.today() - timedelta(days=365 * 5)).isoformat()
-    default_end = date.today().isoformat()
+    default_start = (date.today() - timedelta(days=365 * 4)).isoformat()
+    default_end   = date.today().isoformat()
     default_strategies = enabled_strategy_names()
     strategy_options = [
-        {"label": f"{name}{' *' if name in default_strategies else ''}", "value": name}
+        {"label": name + (" ★" if name in default_strategies else ""), "value": name}
         for name in STRATEGY_ORDER
     ]
 
     app = Dash(__name__, title="Backtests")
 
-    app.index_string = """
-<!DOCTYPE html>
+    app.index_string = """<!DOCTYPE html>
 <html>
   <head>
-    {%metas%}
-    <title>{%title%}</title>
-    {%favicon%}
-    {%css%}
+    {%metas%}<title>{%title%}</title>{%favicon%}{%css%}
     <style>
       :root {
-        --bg: #f8fafc;
+        --bg: #f1f5f9;
         --panel: #ffffff;
-        --line: #d8dee8;
-        --text: #111827;
+        --border: #e2e8f0;
+        --text: #0f172a;
         --muted: #64748b;
         --accent: #2563eb;
+        --accent-light: #eff6ff;
+        --success: #16a34a;
+        --danger: #dc2626;
+        --radius: 10px;
       }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        font-family: Inter, Segoe UI, Arial, sans-serif;
-      }
-      .page { min-height: 100vh; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; font-size: 14px; }
+
+      /* ── Topbar ── */
       .topbar {
-        display: grid;
-        grid-template-columns: 180px 160px 260px minmax(280px, 1fr) 120px;
-        gap: 12px;
-        align-items: end;
-        padding: 16px 18px;
         background: var(--panel);
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
+        padding: 12px 20px;
+        display: flex;
+        align-items: flex-end;
+        gap: 16px;
         position: sticky;
         top: 0;
-        z-index: 5;
+        z-index: 10;
       }
-      .config-panel {
-        margin: 0 18px 16px;
-        padding: 14px;
+      .brand { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 2px; flex-shrink: 0; }
+      .field { display: flex; flex-direction: column; gap: 4px; }
+      .field-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .ticker-input { height: 36px; width: 90px; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; font-size: 14px; font-weight: 600; text-transform: uppercase; }
+      .run-btn {
+        height: 36px; padding: 0 20px;
+        background: var(--accent); color: #fff;
+        border: none; border-radius: 6px;
+        font-size: 13px; font-weight: 700; cursor: pointer;
+        transition: opacity .15s;
+        margin-bottom: 0;
+      }
+      .run-btn:hover { opacity: .88; }
+
+      /* ── Content ── */
+      .content { padding: 16px 20px 32px; max-width: 1600px; }
+      .status-bar { min-height: 22px; color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+
+      /* ── KPI Cards ── */
+      .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+      .kpi-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+      .kpi-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .kpi-value { margin-top: 6px; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+
+      /* ── Charts ── */
+      .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+      .chart-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+
+      /* ── Param panel ── */
+      .param-panel {
         background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px 20px;
+        margin-bottom: 14px;
       }
-      .brand {
-        font-size: 22px;
-        font-weight: 700;
-        line-height: 38px;
-      }
-      .field-label {
-        display: block;
-        color: var(--muted);
+      .param-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+      .tab-strip { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+      .tab-strip label {
+        padding: 5px 12px;
+        border-radius: 20px;
         font-size: 12px;
-        font-weight: 650;
-        margin: 0 0 6px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1.5px solid var(--border);
+        color: var(--muted);
+        background: #fff;
+        transition: all .15s;
+        user-select: none;
       }
-      .ticker-input, .run-button {
-        width: 100%;
-        height: 38px;
-        border: 1px solid var(--line);
+      .tab-strip input { display: none; }
+      .tab-strip input:checked + label {
+        background: var(--accent-light);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .slider-row { margin-bottom: 18px; }
+      .slider-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+      .slider-label { font-size: 12px; font-weight: 600; color: var(--text); }
+      .slider-value { font-size: 13px; font-weight: 700; color: var(--accent); }
+      .param-slider { margin: 0 2px; }
+      .reset-btn {
+        margin-top: 8px;
+        padding: 5px 14px;
+        border: 1.5px solid var(--border);
         border-radius: 6px;
         background: #fff;
-        color: var(--text);
-        font-size: 14px;
-      }
-      .ticker-input { padding: 0 10px; text-transform: uppercase; }
-      .run-button {
-        border-color: var(--accent);
-        background: var(--accent);
-        color: #fff;
-        font-weight: 700;
-        cursor: pointer;
-      }
-      .content { padding: 16px 18px 24px; }
-      .status {
-        min-height: 26px;
-        color: var(--muted);
-        font-size: 13px;
-        margin-bottom: 10px;
-      }
-      .loading-wrap {
-        min-height: 520px;
-      }
-      .metrics {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(120px, 1fr));
-        gap: 12px;
-        margin-bottom: 14px;
-      }
-      .metric-card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 12px 14px;
-      }
-      .metric-label {
-        color: var(--muted);
         font-size: 12px;
-        font-weight: 650;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+        transition: all .15s;
       }
-      .metric-value {
-        margin-top: 6px;
-        font-size: 20px;
-        font-weight: 750;
-      }
-      .chart-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-        margin-bottom: 14px;
-      }
-      .chart-panel, .table-panel {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-      .table-grid {
-        display: grid;
-        grid-template-columns: 1fr 1.2fr;
-        gap: 14px;
-      }
-      .table-title {
-        padding: 12px 14px;
-        font-size: 14px;
-        font-weight: 750;
-        border-bottom: 1px solid var(--line);
-      }
-      @media (max-width: 980px) {
-        .topbar { grid-template-columns: 1fr; align-items: stretch; }
-        .brand { line-height: 1.2; }
-        .metrics, .chart-grid, .table-grid { grid-template-columns: 1fr; }
+      .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+      /* ── Tables ── */
+      .tables-row { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; }
+      .table-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+      .table-title { padding: 12px 16px; font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--border); }
+
+      /* ── Misc ── */
+      .loading-wrap { min-height: 400px; }
+      @media (max-width: 900px) {
+        .kpi-row, .chart-row, .tables-row { grid-template-columns: 1fr; }
+        .topbar { flex-wrap: wrap; }
       }
     </style>
   </head>
-  <body>
-    {%app_entry%}
-    <footer>
-      {%config%}
-      {%scripts%}
-      {%renderer%}
-    </footer>
-  </body>
-</html>
-"""
+  <body>{%app_entry%}<footer>{%config%}{%scripts%}{%renderer%}</footer></body>
+</html>"""
 
-    table_style = {
-        "style_table": {"overflowX": "auto", "maxHeight": "360px", "overflowY": "auto"},
-        "style_header": {
-            "backgroundColor": "#f1f5f9",
-            "fontWeight": "700",
-            "border": "1px solid #d8dee8",
-        },
-        "style_cell": {
-            "fontFamily": "Inter, Segoe UI, Arial, sans-serif",
-            "fontSize": "12px",
-            "padding": "8px",
-            "border": "1px solid #e5e7eb",
-            "whiteSpace": "nowrap",
-        },
-        "style_data_conditional": [
-            {"if": {"row_index": "odd"}, "backgroundColor": "#fbfdff"},
-        ],
+    _ts = {
+        "style_table": {"overflowX": "auto", "maxHeight": "340px", "overflowY": "auto"},
+        "style_header": {"backgroundColor": "#f8fafc", "fontWeight": "700", "border": "1px solid #e2e8f0", "fontSize": "12px"},
+        "style_cell":   {"fontFamily": "Inter, system-ui, sans-serif", "fontSize": "12px", "padding": "7px 10px", "border": "1px solid #f1f5f9", "whiteSpace": "nowrap"},
+        "style_data_conditional": [{"if": {"row_index": "odd"}, "backgroundColor": "#fafbfc"}],
     }
 
-    app.layout = html.Div(
-        className="page",
-        children=[
+    # ── Build param panels (one per strategy) ─────────────────────────────────
+    param_panels = []
+    for s in STRATEGY_ORDER:
+        param_panels.append(
             html.Div(
-                className="topbar",
-                children=[
-                    html.Div("Backtests", className="brand"),
-                    html.Label(
-                        [
-                            html.Span("Ticker", className="field-label"),
-                            dcc.Input(
-                                id="ticker-input",
-                                value="SPY",
-                                className="ticker-input",
-                                debounce=True,
-                            ),
-                        ]
-                    ),
-                    html.Label(
-                        [
-                            html.Span("Periode", className="field-label"),
-                            dcc.DatePickerRange(
-                                id="date-range",
-                                start_date=default_start,
-                                end_date=default_end,
-                                display_format="YYYY-MM-DD",
-                            ),
-                        ]
-                    ),
-                    html.Label(
-                        [
-                            html.Span("Strategies", className="field-label"),
-                            dcc.Dropdown(
-                                id="strategy-select",
-                                options=strategy_options,
-                                value=default_strategies,
-                                multi=True,
-                                clearable=False,
-                            ),
-                        ]
-                    ),
-                    html.Button("Lancer", id="run-button", className="run-button"),
-                ],
-            ),
-            html.Div(
-                className="config-panel",
-                children=[
-                    html.Div("Paramètres dynamiques", className="field-label"),
-                    html.Div(
-                        [
-                            html.Div("True DCA monthly size", className="field-label"),
-                            dcc.Slider(
-                                id="true-dca-monthly-size",
-                                min=0.01,
-                                max=0.10,
-                                step=0.005,
-                                value=0.05,
-                                marks={0.01: "1%", 0.03: "3%", 0.05: "5%", 0.08: "8%", 0.10: "10%"},
-                                tooltip={"placement": "bottom", "always_visible": False},
-                            ),
-                            html.Div("True DCA dip size", className="field-label", style={"marginTop": "12px"}),
-                            dcc.Slider(
-                                id="true-dca-dip-size",
-                                min=0.01,
-                                max=0.15,
-                                step=0.005,
-                                value=0.075,
-                                marks={0.01: "1%", 0.05: "5%", 0.10: "10%", 0.15: "15%"},
-                                tooltip={"placement": "bottom", "always_visible": False},
-                            ),
-                            html.Div("True DCA dip threshold", className="field-label", style={"marginTop": "12px"}),
-                            dcc.Slider(
-                                id="true-dca-dip-threshold",
-                                min=-0.15,
-                                max=0.0,
-                                step=0.005,
-                                value=-0.05,
-                                marks={-0.15: "-15%", -0.10: "-10%", -0.05: "-5%", 0.0: "0%"},
-                                tooltip={"placement": "bottom", "always_visible": False},
-                            ),
-                            html.Div("Tactical DCA dip threshold", className="field-label", style={"marginTop": "12px"}),
-                            dcc.Slider(
-                                id="tactical-dca-dip-threshold",
-                                min=-0.15,
-                                max=0.0,
-                                step=0.005,
-                                value=-0.05,
-                                marks={-0.15: "-15%", -0.10: "-10%", -0.05: "-5%", 0.0: "0%"},
-                                tooltip={"placement": "bottom", "always_visible": False},
-                            ),
-                            html.Div("Fixed risk % (position sizing)", className="field-label", style={"marginTop": "12px"}),
-                            dcc.Slider(
-                                id="fixed-risk-pct",
-                                min=0.001,
-                                max=0.02,
-                                step=0.001,
-                                value=0.005,
-                                marks={0.001: "0.1%", 0.005: "0.5%", 0.010: "1%", 0.020: "2%"},
-                                tooltip={"placement": "bottom", "always_visible": False},
-                            ),
-                            html.Div("Paramètres avancés (JSON)", className="field-label", style={"marginTop": "14px"}),
-                            dcc.Textarea(
-                                id="config-overrides",
-                                value='{"strategies": {"tactical_dca": {"buy_day_of_month": 1}}, "risk": {"position_sizing": {"fixed_risk_pct": 0.005}}}',
-                                style={"width": "100%", "height": "120px", "fontFamily": "Courier New, monospace", "fontSize": "12px"},
-                            ),
-                            html.Div(
-                                "Utilise les sliders pour modifier la taille des positions et le seuil de dip sans saisir de JSON.",
-                                style={"marginTop": "8px", "color": "#475569", "fontSize": "12px"},
-                            ),
-                        ],
-                    ),
-                ],
-            ),
-            html.Div(
-                className="content",
-                children=[
-                    dcc.Loading(
-                        type="circle",
-                        color="#2563eb",
-                        parent_className="loading-wrap",
-                        children=[
-                            html.Div(
-                                id="status-line",
-                                className="status",
-                                children="Pret. Choisis une periode puis clique sur Lancer.",
-                            ),
-                            html.Div(id="metric-cards", className="metrics"),
-                            html.Div(
-                                className="chart-grid",
-                                children=[
-                                    html.Div(dcc.Graph(id="equity-chart", config={"displayModeBar": False}), className="chart-panel"),
-                                    html.Div(dcc.Graph(id="drawdown-chart", config={"displayModeBar": False}), className="chart-panel"),
-                                ],
-                            ),
-                            html.Div(
-                                className="table-grid",
-                                children=[
-                                    html.Div(
-                                        className="table-panel",
-                                        children=[
-                                            html.Div("Metriques", className="table-title"),
-                                            dash_table.DataTable(
-                                                id="metrics-table",
-                                                columns=[
-                                                    {"name": "Strategie", "id": "strategy"},
-                                                    {"name": "Initial", "id": "initial"},
-                                                    {"name": "Final", "id": "final"},
-                                                    {"name": "Return %", "id": "return_pct"},
-                                                    {"name": "Sharpe", "id": "sharpe"},
-                                                    {"name": "Max DD %", "id": "max_dd_pct"},
-                                                    {"name": "Trades", "id": "trades"},
-                                                    {"name": "Win %", "id": "win_rate_pct"},
-                                                    {"name": "PF", "id": "profit_factor"},
-                                                    {"name": "Avg pos", "id": "avg_position_size"},
-                                                    {"name": "Total invest", "id": "total_invested"},
-                                                    {"name": "vs B&H %", "id": "vs_bh_pct"},
-                                                ],
-                                                data=[],
-                                                **table_style,
-                                            ),
-                                        ],
-                                    ),
-                                    html.Div(
-                                        className="table-panel",
-                                        children=[
-                                            html.Div("Trades", className="table-title"),
-                                            dash_table.DataTable(
-                                                id="trades-table",
-                                                columns=[
-                                                    {"name": "Strategie", "id": "strategy"},
-                                                    {"name": "Side", "id": "side"},
-                                                    {"name": "Entry", "id": "entry_date"},
-                                                    {"name": "Exit", "id": "exit_date"},
-                                                    {"name": "Prix in", "id": "entry"},
-                                                    {"name": "Prix out", "id": "exit"},
-                                                    {"name": "Qty", "id": "qty"},
-                                                    {"name": "PnL", "id": "pnl"},
-                                                    {"name": "PnL %", "id": "pnl_pct"},
-                                                    {"name": "Raison", "id": "reason"},
-                                                ],
-                                                data=[],
-                                                page_size=12,
-                                                **table_style,
-                                            ),
-                                        ],
-                                    ),
-                                ],
-                            ),
-                        ],
-                    ),
-                ],
-            ),
-        ],
-    )
+                id=f"pp-{s}",
+                children=_build_param_panel(s),
+                style={"display": "block" if s == STRATEGY_ORDER[0] else "none"},
+            )
+        )
 
+    # ── Tab strip options ─────────────────────────────────────────────────────
+    tab_options = [{"label": s.replace("_", " "), "value": s} for s in STRATEGY_ORDER]
+
+    app.layout = html.Div([
+
+        # Topbar
+        html.Div(className="topbar", children=[
+            html.Div("Backtests", className="brand"),
+            html.Div(className="field", children=[
+                html.Span("Ticker", className="field-label"),
+                dcc.Input(id="ticker", value="SPY", className="ticker-input", debounce=True),
+            ]),
+            html.Div(className="field", children=[
+                html.Span("Période", className="field-label"),
+                dcc.DatePickerRange(
+                    id="date-range", start_date=default_start, end_date=default_end,
+                    display_format="YYYY-MM-DD",
+                ),
+            ]),
+            html.Div(className="field", style={"flex": "1", "minWidth": "220px"}, children=[
+                html.Span("Stratégies", className="field-label"),
+                dcc.Dropdown(
+                    id="strat-select", options=strategy_options,
+                    value=default_strategies, multi=True, clearable=False,
+                ),
+            ]),
+            html.Button("Lancer", id="run-btn", className="run-btn"),
+        ]),
+
+        html.Div(className="content", children=[
+
+            # Param panel
+            html.Div(className="param-panel", children=[
+                html.Div("Paramètres de stratégie", className="param-title"),
+                dcc.RadioItems(
+                    id="param-tab",
+                    options=tab_options,
+                    value=STRATEGY_ORDER[0],
+                    className="tab-strip",
+                    inputStyle={"display": "none"},
+                    labelStyle={},
+                ),
+                html.Div(id="param-panels-container", children=param_panels),
+            ]),
+
+            dcc.Loading(type="circle", color="#2563eb", parent_className="loading-wrap", children=[
+                html.Div(id="status-bar", className="status-bar",
+                         children="Choisis une période et clique Lancer."),
+                html.Div(id="kpi-row", className="kpi-row"),
+                html.Div(className="chart-row", children=[
+                    html.Div(dcc.Graph(id="eq-chart",  config={"displayModeBar": False}), className="chart-panel"),
+                    html.Div(dcc.Graph(id="dd-chart",  config={"displayModeBar": False}), className="chart-panel"),
+                ]),
+                html.Div(className="tables-row", children=[
+                    html.Div(className="table-panel", children=[
+                        html.Div("Métriques", className="table-title"),
+                        dash_table.DataTable(
+                            id="metrics-tbl",
+                            columns=[
+                                {"name": "Stratégie",     "id": "strategie"},
+                                {"name": "Initial",       "id": "initial"},
+                                {"name": "Final",         "id": "final"},
+                                {"name": "Return %",      "id": "return_pct"},
+                                {"name": "CAGR",          "id": "cagr"},
+                                {"name": "Sharpe",        "id": "sharpe"},
+                                {"name": "Max DD",        "id": "max_dd"},
+                                {"name": "Trades",        "id": "trades"},
+                                {"name": "Win % (1A DCA)","id": "win_rate"},
+                                {"name": "PF",            "id": "pf"},
+                                {"name": "vs B&H",        "id": "vs_bh"},
+                                {"name": "Total investi", "id": "total_invest"},
+                            ],
+                            data=[], **_ts,
+                        ),
+                    ]),
+                    html.Div(className="table-panel", children=[
+                        html.Div("Trades", className="table-title"),
+                        dash_table.DataTable(
+                            id="trades-tbl",
+                            columns=[
+                                {"name": "Stratégie", "id": "strategie"},
+                                {"name": "Côté",      "id": "side"},
+                                {"name": "Entrée",    "id": "entry_date"},
+                                {"name": "Sortie",    "id": "exit_date"},
+                                {"name": "Prix in",   "id": "entry"},
+                                {"name": "Prix out",  "id": "exit"},
+                                {"name": "Qté",       "id": "qty"},
+                                {"name": "PnL",       "id": "pnl"},
+                                {"name": "PnL %",     "id": "pnl_pct"},
+                                {"name": "Raison",    "id": "raison"},
+                            ],
+                            data=[], page_size=15, **_ts,
+                        ),
+                    ]),
+                ]),
+            ]),
+        ]),
+    ])
+
+    # ── Callbacks ─────────────────────────────────────────────────────────────
+
+    # Show/hide param panels when tab changes
     @app.callback(
-        Output("status-line", "children"),
-        Output("metric-cards", "children"),
-        Output("equity-chart", "figure"),
-        Output("drawdown-chart", "figure"),
-        Output("metrics-table", "data"),
-        Output("trades-table", "data"),
-        Input("run-button", "n_clicks"),
-        State("ticker-input", "value"),
-        State("date-range", "start_date"),
-        State("date-range", "end_date"),
-        State("strategy-select", "value"),
-        State("config-overrides", "value"),
-        State("true-dca-monthly-size", "value"),
-        State("true-dca-dip-size", "value"),
-        State("true-dca-dip-threshold", "value"),
-        State("tactical-dca-dip-threshold", "value"),
-        State("fixed-risk-pct", "value"),
+        [Output(f"pp-{s}", "style") for s in STRATEGY_ORDER],
+        Input("param-tab", "value"),
     )
-    def update_dashboard(
-        _: int | None,
+    def toggle_param_panels(selected: str) -> list[dict]:
+        return [{"display": "block" if s == selected else "none"} for s in STRATEGY_ORDER]
+
+    # Update slider value labels live
+    for _s in STRATEGY_ORDER:
+        for _p in STRATEGY_PARAMS.get(_s, []):
+            _sid = f"sl-{_s}-{_p['key']}"
+            _vid = f"val-{_s}-{_p['key']}"
+            _sc  = _p["scale"]
+            _unit = _p["unit"]
+
+            @app.callback(
+                Output(_vid, "children"),
+                Input(_sid, "value"),
+            )
+            def _update_label(val: float, sc: int = _sc, unit: str = _unit) -> str:
+                if val is None:
+                    return "—"
+                disp = round(val * sc, 2)
+                return f"{disp}{unit}"
+
+    # Reset buttons (one per strategy)
+    for _s in STRATEGY_ORDER:
+        _params = STRATEGY_PARAMS.get(_s, [])
+        if not _params:
+            continue
+
+        @app.callback(
+            [Output(f"sl-{_s}-{p['key']}", "value") for p in _params],
+            Input(f"reset-{_s}", "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def _reset(_, s: str = _s, ps: list = _params) -> list:
+            return [p["default"] for p in ps]
+
+    _empty_eq = _empty_fig("Courbes equity")
+    _empty_dd = _empty_fig("Drawdown")
+    _default_out = ("Choisis une période et clique Lancer.", [], _empty_eq, _empty_dd, [], [])
+
+    # Main run callback.
+    # Triggered by: button click, ticker change (debounced), date change, strategy selection or slider updates.
+    @app.callback(
+        Output("status-bar",  "children"),
+        Output("kpi-row",     "children"),
+        Output("eq-chart",    "figure"),
+        Output("dd-chart",    "figure"),
+        Output("metrics-tbl", "data"),
+        Output("trades-tbl",  "data"),
+        Input("run-btn",      "n_clicks"),
+        Input("ticker",       "value"),
+        Input("date-range",   "start_date"),
+        Input("date-range",   "end_date"),
+        Input("strat-select", "value"),
+        *[Input(sid, "value") for sid in ALL_SLIDER_IDS],
+        prevent_initial_call=True,
+    )
+    def run(
+        _n_clicks: int | None,
         ticker: str,
-        start_date: str,
-        end_date: str,
+        start_date: str | None,
+        end_date: str | None,
         strategy_names: list[str],
-        config_overrides: str,
-        true_dca_monthly_size: float,
-        true_dca_dip_size: float,
-        true_dca_dip_threshold: float,
-        tactical_dca_dip_threshold: float,
-        fixed_risk_pct: float,
-    ) -> tuple[Any, Any, go.Figure, go.Figure, list[dict[str, Any]], list[dict[str, Any]]]:
-        ticker = (ticker or "SPY").upper().strip()
+        *slider_values: float,
+    ) -> tuple:
+
+        # Guard: incomplete inputs — wait silently
+        if not start_date or not end_date or not ticker or not ticker.strip():
+            return _default_out
+        try:
+            if pd.to_datetime(start_date) >= pd.to_datetime(end_date):
+                return ("Dates invalides : début ≥ fin.", [], _empty_eq, _empty_dd, [], [])
+        except Exception:
+            return _default_out
+
+        ticker = ticker.upper().strip()
         strategy_names = strategy_names or enabled_strategy_names()
 
-        overrides: dict[str, Any] = {
-            "strategies": {
-                "true_dca": {
-                    "monthly_size_pct": float(true_dca_monthly_size or 0.05),
-                    "dip_size_pct": float(true_dca_dip_size or 0.075),
-                    "dip_threshold_pct": float(true_dca_dip_threshold or -0.05),
-                },
-                "tactical_dca": {
-                    "dip_threshold_pct": float(tactical_dca_dip_threshold or -0.05),
-                },
-            },
-            "risk": {
-                "position_sizing": {
-                    "fixed_risk_pct": float(fixed_risk_pct or 0.005),
-                }
-            },
-        }
-        if config_overrides:
-            try:
-                parsed = json.loads(config_overrides)
-                if not isinstance(parsed, dict):
-                    raise ValueError("Le JSON doit être un objet (dictionnaire).")
-                overrides = merge_dicts(overrides, parsed)
-            except ValueError as exc:
-                status = f"Erreur JSON: {exc}"
-                return (
-                    status,
-                    [],
-                    make_empty_figure("Courbes equity"),
-                    make_empty_figure("Drawdown"),
-                    [],
-                    [],
-                )
+        # Build param overrides from slider values
+        idx = 0
+        strat_overrides: dict[str, Any] = {}
+        for s in STRATEGY_ORDER:
+            params = STRATEGY_PARAMS.get(s, [])
+            strat_overrides[s] = {}
+            for p in params:
+                v = slider_values[idx]
+                strat_overrides[s][p["key"]] = float(v if v is not None else p["default"])
+                idx += 1
+        overrides = {"strategies": strat_overrides}
 
         try:
             df = download_prices(ticker, start_date, end_date)
             results = run_selected_backtests(ticker, df, strategy_names, overrides)
+            for r in results:
+                r.metrics.update(compute_trade_stats(r))
             status = (
-                f"{ticker} | {df.index[0].date()} - {df.index[-1].date()} | "
-                f"{len(df)} bougies | capital ${build_backtester(overrides.get('risk')).initial_capital:,.2f}"
+                f"{ticker}  ·  {df.index[0].date()} → {df.index[-1].date()}"
+                f"  ·  {len(df)} barres"
+                f"  ·  capital ${build_backtester().initial_capital:,.0f}"
             )
-            for result in results:
-                stats = compute_trade_stats(result)
-                result.metrics.update(stats)
             return (
                 status,
-                metric_cards(results),
+                summary_cards(results),
                 make_equity_figure(df, results),
                 make_drawdown_figure(results),
                 metric_rows(results),
                 trade_rows(df, results),
             )
         except Exception as exc:
-            status = f"Erreur: {exc}"
-            return (
-                status,
-                [],
-                make_empty_figure("Courbes equity"),
-                make_empty_figure("Drawdown"),
-                [],
-                [],
-            )
+            return (f"Erreur : {exc}", [], _empty_eq, _empty_dd, [], [])
 
     return app
 
 
+# ── Entry point ───────────────────────────────────────────────────────────────
+
 def parse_args() -> argparse.Namespace:
     settings = get_settings()
     default_port = int(settings.get("monitoring", {}).get("dashboard_port", 8050))
-    parser = argparse.ArgumentParser(description="Backtest dashboard")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=default_port)
-    parser.add_argument("--debug", action="store_true")
-    return parser.parse_args()
+    p = argparse.ArgumentParser(description="Backtest dashboard")
+    p.add_argument("--host",  default="127.0.0.1")
+    p.add_argument("--port",  type=int, default=default_port)
+    p.add_argument("--debug", action="store_true")
+    return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    app = create_app()
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    create_app().run(host=args.host, port=args.port, debug=args.debug)
 
 
 if __name__ == "__main__":
