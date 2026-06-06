@@ -3,14 +3,15 @@ src/engine/decision_engine.py
 
 The Decision Engine is the central orchestrator.
 
-Pipeline (per asset per cycle):
+Pipeline (per cycle) :
   1. Fetch features from FeatureEngine
   2. Detect market regime
   3. Run all applicable strategies → raw Signals
-  4. Run Rules Engine on each non-NO_TRADE signal
-  5. Query AI advisory layer (optional)
-  6. Run Risk Manager on each rules-approved signal
-  7. Return a list of RiskVerdict-stamped Signals for execution
+  4. SignalAggregator : consolide les signaux par asset (résolution conflits + boost accord)
+  5. Run Rules Engine on each aggregated non-NO_TRADE signal
+  6. Query AI advisory layer (optional)
+  7. Run Risk Manager on each rules-approved signal
+  8. Return a list of RiskVerdict-stamped Signals for execution
 
 The Decision Engine NEVER submits orders. It returns decisions.
 The Execution Engine handles submission.
@@ -23,6 +24,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
+from src.engine.signal_aggregator import SignalAggregator
 from src.features.regime_detector import MarketRegimeDetector, RegimeResult
 from src.risk.risk_manager import KillSwitchTriggered, RiskDecision, RiskManager, RiskVerdict
 from src.rules.rules_engine import RulesEngine, RulesVerdict
@@ -87,6 +89,9 @@ class DecisionEngine:
         self.rules_engine = RulesEngine(risk_cfg, settings_cfg, strategy_cfg)
         self.risk_manager = RiskManager(risk_cfg)
         self.ai_layer = ai_layer
+        self.signal_aggregator = SignalAggregator(
+            min_confidence=settings_cfg.get("signal_aggregator", {}).get("min_confidence", 0.45)
+        )
 
         # Build strategy library
         scfg = strategy_cfg.get("strategies", {})
@@ -134,7 +139,7 @@ class DecisionEngine:
 
         decisions: list[DecisionRecord] = []
 
-        # Use a benchmark asset for regime (SPY if available)
+        # Benchmark pour la détection de régime
         benchmark = "SPY"
         if benchmark in data_map:
             regime_result = self.regime_detector.detect(data_map[benchmark], vix_series)
@@ -145,13 +150,17 @@ class DecisionEngine:
         regime_str = regime_result.regime.value
         logger.info("Market regime: %s (confidence=%.2f)", regime_str, regime_result.confidence)
 
-        # Determine active strategies per regime
+        # --- Phase 1 : collecte des signaux bruts de toutes les stratégies ---
         regime_map = self.strategy_cfg.get("regime_strategy_map", {})
         active_by_horizon: dict[str, list[str]] = regime_map.get(regime_str, {})
+
+        raw_signals: list[Signal] = []
+        df_map: dict[str, pd.DataFrame] = {}  # garde le df par asset pour _evaluate_signal
 
         for asset, df in data_map.items():
             if df is None or df.empty:
                 continue
+            df_map[asset] = df
 
             for horizon_name, strategy_names in active_by_horizon.items():
                 for strategy_name in strategy_names:
@@ -175,18 +184,42 @@ class DecisionEngine:
                         logger.debug("NO_TRADE: %s / %s", strategy_name, asset)
                         continue
 
-                    record = self._evaluate_signal(
-                        raw_signal, df, regime_result, portfolio_state,
-                        open_positions, trade_history, regime_str
-                    )
-                    decisions.append(record)
+                    raw_signals.append(raw_signal)
 
-                    if record.final_action == "EXECUTE":
-                        logger.info(
-                            "DECISION → EXECUTE: %s %s $%.2f",
-                            asset, raw_signal.signal.value,
-                            record.risk_verdict.approved_size_usd,
-                        )
+        logger.info(
+            "Cycle: %d raw signals from %d assets",
+            len(raw_signals), len(df_map),
+        )
+
+        # --- Phase 2 : agrégation des signaux ---
+        aggregated_signals = self.signal_aggregator.aggregate(raw_signals)
+
+        logger.info(
+            "After aggregation: %d consolidated signals",
+            len(aggregated_signals),
+        )
+
+        # --- Phase 3 : évaluation Rules → AI → Risk sur chaque signal agrégé ---
+        for agg_signal in aggregated_signals:
+            df = df_map.get(agg_signal.asset)
+            if df is None:
+                continue
+
+            record = self._evaluate_signal(
+                agg_signal, df, regime_result, portfolio_state,
+                open_positions, trade_history, regime_str
+            )
+            decisions.append(record)
+
+            if record.final_action == "EXECUTE":
+                logger.info(
+                    "DECISION → EXECUTE: %s %s $%.2f (conf=%.2f, %d bots)",
+                    agg_signal.asset,
+                    agg_signal.signal.value,
+                    record.risk_verdict.approved_size_usd,
+                    agg_signal.confidence,
+                    agg_signal.metadata.get("n_agreeing", 1),
+                )
 
         return decisions
 
@@ -303,6 +336,10 @@ class DecisionEngine:
     # ------------------------------------------------------------------ #
     # Pass-through to Risk Manager for event registration
     # ------------------------------------------------------------------ #
+
+    def apply_news_risk(self, risk_scores: dict[str, float]) -> None:
+        """Injecte des scores de risque news dans l'agrégateur avant le prochain cycle."""
+        self.signal_aggregator.apply_news_override(risk_scores)
 
     def register_trade_result(
         self, pnl: float, horizon: Horizon, total_capital: float

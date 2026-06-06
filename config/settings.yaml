@@ -109,6 +109,24 @@ alerts:
   # Minimum severity to notify: DEBUG | INFO | WARNING | CRITICAL
   min_severity: "WARNING"
 
+# ---- Signal Aggregator ----
+signal_aggregator:
+  min_confidence: 0.45        # Confidence minimale pour transmettre un signal agrégé
+
+# ---- News Layer ----
+news:
+  enabled: false              # Mettre true pour activer (nécessite au moins une API key)
+  refresh_minutes: 30         # Fréquence de collecte
+  max_age_hours: 24           # Ancienneté max des articles
+  sources:                    # Sources activées (par ordre de priorité)
+    - "finnhub"
+    - "newsapi"
+    - "rss"
+  # API keys (optionnelles — récupérées depuis .env si non définies ici)
+  finnhub_api_key: null       # ou env var FINNHUB_API_KEY
+  newsapi_key: null           # ou env var NEWSAPI_KEY
+  alpha_vantage_key: null     # ou env var ALPHA_VANTAGE_KEY
+
 # ---- Monitoring ----
 monitoring:
   log_dir: "data/logs"

@@ -40,6 +40,11 @@ def get_strategy_config() -> dict[str, Any]:
     return _load_yaml("strategies.yaml")
 
 
+@lru_cache(maxsize=1)
+def get_profile_config() -> dict[str, Any]:
+    return _load_yaml("profile.yaml")
+
+
 def get_env(key: str, default: str | None = None) -> str:
     """Read environment variable, raise if missing and no default."""
     value = os.environ.get(key, default)

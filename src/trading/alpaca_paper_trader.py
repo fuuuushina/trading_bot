@@ -25,7 +25,8 @@ from src.features.indicators import compute_all_features
 from src.features.regime_detector import MarketRegimeDetector
 from src.strategies.base import SignalType
 from src.strategies.breakout import BreakoutStrategy
-from src.strategies.dca import DCAStrategy
+from src.strategies.tactical_dca import TacticalDCAStrategy
+from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.rsi_dip_buyer import RSIDipBuyerStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
 
@@ -150,7 +151,9 @@ class AlpacaPaperTradingEngine:
         scfg = get_strategy_config().get("strategies", {})
         strategies: dict[str, Any] = {}
         if scfg.get("true_dca", {}).get("enabled", False):
-            strategies["true_dca"] = DCAStrategy(scfg.get("true_dca", {}))
+            strategies["true_dca"] = TrueDCAStrategy(scfg.get("true_dca", {}))
+        if scfg.get("tactical_dca", {}).get("enabled", False):
+            strategies["tactical_dca"] = TacticalDCAStrategy(scfg.get("tactical_dca", {}))
         if scfg.get("rsi_dip_buyer", {}).get("enabled", False):
             strategies["rsi_dip_buyer"] = RSIDipBuyerStrategy(scfg.get("rsi_dip_buyer", {}))
         if scfg.get("trend_following", {}).get("enabled", False):

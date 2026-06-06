@@ -1,0 +1,36 @@
+# ============================================================
+# TRADING BOT - PROFIL CLIENT
+# ============================================================
+# Ce fichier définit pour qui le bot trade.
+# L'IA stratégique utilisera ce profil pour définir l'allocation.
+
+client:
+  name: "default"
+
+  # Capital total disponible (USD)
+  capital: 10000.0
+
+  # Tolérance au risque : conservative | moderate | aggressive | speculative
+  risk_tolerance: "moderate"
+
+  # Objectif : income | growth | wealth_preservation | balanced
+  objective: "growth"
+
+  # Horizon d'investissement (années)
+  horizon_years: 5
+
+  # Drawdown maximum acceptable (fraction, ex: 0.20 = 20%)
+  max_drawdown_tolerance: 0.20
+
+  # Rendement annuel cible (null = calculé automatiquement selon profil)
+  target_annual_return: null
+
+  # Âge du client (optionnel, utilisé pour ajuster l'horizon)
+  age: null
+
+  # Préférences d'actifs
+  preferences:
+    etf: true
+    stocks: true
+    intraday: false
+    crypto: false

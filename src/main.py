@@ -26,7 +26,7 @@ from pathlib import Path
 # Ensure project root is on path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.loader import get_risk_config, get_settings, get_strategy_config, is_live_enabled
+from config.loader import get_profile_config, get_risk_config, get_settings, get_strategy_config, is_live_enabled
 from src.monitoring.logger import AuditLogger, AlertDispatcher, DailyReporter, configure_logging
 
 
@@ -106,18 +106,39 @@ def run_paper_loop() -> None:
     import yfinance as yf  # type: ignore
 
     from src.ai.advisory import AIAdvisoryLayer
+    from src.ai.strategic_planner import StrategicPlanner
     from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
     from src.engine.decision_engine import DecisionEngine
     from src.execution.paper_broker import PaperBroker, OrderSide
     from src.features.indicators import compute_all_features
+    from src.news.news_manager import NewsManager
+    from src.portfolio.allocation_engine import AllocationEngine
+    from src.profile.client_profile import ClientProfile
 
     settings = get_settings()
     risk_cfg = get_risk_config()
     strategy_cfg = get_strategy_config()
+    profile_cfg = get_profile_config()
 
     broker_cfg = settings.get("broker", {}).get("paper", {})
     ai_cfg = settings.get("ai", {})
     alerts_cfg = settings.get("alerts", {})
+    news_cfg = settings.get("news", {})
+
+    # --- Profil client + plan stratégique ---
+    profile = ClientProfile.from_dict(profile_cfg.get("client", {}))
+    planner = StrategicPlanner(ai_cfg)
+    plan = planner.build_plan(profile)
+    allocation_engine = AllocationEngine(risk_cfg, strategy_plan=plan)
+
+    logger = logging.getLogger("main")
+    logger.info(
+        "Client profile: %s | target=%.0f%% | allocation=%s",
+        profile.risk_profile_label,
+        plan.target_annual_return * 100,
+        plan.allocation,
+    )
+    logger.info("Strategy reasoning: %s", plan.reasoning)
 
     broker = PaperBroker(
         initial_capital=broker_cfg.get("initial_capital", 100_000.0),
@@ -126,9 +147,14 @@ def run_paper_loop() -> None:
     )
     ai_layer = AIAdvisoryLayer(ai_cfg) if ai_cfg.get("enabled") else None
     engine = DecisionEngine(risk_cfg, settings, strategy_cfg, ai_layer=ai_layer)
+
+    # --- News Manager ---
+    news_manager = NewsManager(news_cfg, universe=universe)
+    news_manager.start()
     audit = AuditLogger()
     alerts = AlertDispatcher(alerts_cfg)
     reporter = DailyReporter()
+    # logger déjà défini plus haut (après import)
 
     universe = (
         settings.get("universe", {}).get("swing", []) +
@@ -136,7 +162,6 @@ def run_paper_loop() -> None:
     )[:10]  # Cap at 10 for now
 
     configure_yfinance_cache()
-    logger = logging.getLogger("main")
     logger.info("Paper trading loop started. Universe: %s", universe)
     alerts.send("Bot started in PAPER MODE.", "INFO")
 
@@ -172,6 +197,10 @@ def run_paper_loop() -> None:
             portfolio_state = broker.get_portfolio_state()
             open_positions = broker.get_open_positions()
             trade_history = broker.get_trade_history()
+
+            # Injecter les scores news dans l'agrégateur avant le cycle
+            if news_manager.enabled:
+                engine.apply_news_risk(news_manager.get_risk_scores())
 
             # Run decision cycle
             decisions = engine.run_cycle(
@@ -236,6 +265,7 @@ def run_paper_loop() -> None:
         except KeyboardInterrupt:
             logger.info("Bot stopped by user.")
             alerts.send("Bot stopped by user (KeyboardInterrupt).", "WARNING")
+            news_manager.stop()
             break
         except Exception as exc:
             logger.critical("Unhandled error in main loop: %s", exc, exc_info=True)

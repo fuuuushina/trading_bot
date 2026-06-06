@@ -2,13 +2,20 @@
 src/portfolio/allocation_engine.py
 
 Allocation Engine.
-Determines target allocation across long_term / swing / intraday / cash
-based on the current market regime and portfolio drawdown.
+Détermine l'allocation cible long_term / swing / intraday / cash.
+
+Priorité (du plus fort au plus faible) :
+  1. StrategyPlan fourni par le Strategic Planner (profil client)
+  2. Regime-based tables (REGIME_ALLOCATIONS)
+  3. Fallback "unknown"
+
+Le drawdown courant applique un facteur défensif supplémentaire.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +77,25 @@ REGIME_ALLOCATIONS: dict[str, AllocationTarget] = {
 
 class AllocationEngine:
     """
-    Computes target allocation and checks if a proposed trade
-    is within its horizon budget.
+    Calcule l'allocation cible et vérifie si un trade proposé
+    entre dans le budget de son horizon.
     """
 
-    def __init__(self, risk_cfg: dict) -> None:
+    def __init__(
+        self,
+        risk_cfg: dict,
+        strategy_plan: Optional["StrategyPlan"] = None,  # type: ignore[name-defined]
+    ) -> None:
         self.risk = risk_cfg.get("risk", {})
+        self._plan = strategy_plan   # peut être None (fallback régime)
+
+    def update_plan(self, plan: "StrategyPlan") -> None:  # type: ignore[name-defined]
+        """Met à jour le plan stratégique (appelé quand le profil change)."""
+        self._plan = plan
+        logger.info(
+            "AllocationEngine: plan updated → %s target=%.0f%%",
+            plan.profile_label, plan.target_annual_return * 100,
+        )
 
     def get_target(
         self,
@@ -83,10 +103,22 @@ class AllocationEngine:
         drawdown_pct: float,
     ) -> AllocationTarget:
         """
-        Get allocation target for given regime and drawdown.
-        Drawdown acts as an additional defensive multiplier.
+        Retourne l'allocation cible pour le régime et drawdown courants.
+
+        Si un StrategyPlan est actif, son allocation sert de base.
+        Sinon, on utilise la table régime par défaut.
+        Le drawdown applique toujours un facteur défensif.
         """
-        base = REGIME_ALLOCATIONS.get(regime, REGIME_ALLOCATIONS["unknown"])
+        if self._plan is not None:
+            plan_alloc = self._plan.allocation
+            base = AllocationTarget(
+                long_term=plan_alloc.get("long_term", 0.60),
+                swing=plan_alloc.get("swing", 0.20),
+                intraday=plan_alloc.get("intraday", 0.05),
+                cash=plan_alloc.get("cash", 0.15),
+            )
+        else:
+            base = REGIME_ALLOCATIONS.get(regime, REGIME_ALLOCATIONS["unknown"])
 
         # Progressive defensive shift based on drawdown
         if drawdown_pct < -0.10:

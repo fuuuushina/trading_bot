@@ -34,6 +34,8 @@ from src.features.regime_detector import MarketRegimeDetector
 from src.strategies.base import SignalType
 from src.strategies.breakout import BreakoutStrategy
 from src.strategies.rsi_dip_buyer import RSIDipBuyerStrategy
+from src.strategies.tactical_dca import TacticalDCAStrategy
+from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
 
 logger = logging.getLogger(__name__)
@@ -204,11 +206,18 @@ class PaperTradingEngine:
 
     def _build_strategies(self) -> dict[str, Any]:
         scfg = get_strategy_config().get("strategies", {})
-        return {
-            "rsi_dip_buyer":   RSIDipBuyerStrategy(scfg.get("rsi_dip_buyer", {})),
-            "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
-            "breakout":        BreakoutStrategy(scfg.get("breakout", {})),
-        }
+        strategies: dict[str, Any] = {}
+        if scfg.get("true_dca", {}).get("enabled", False):
+            strategies["true_dca"] = TrueDCAStrategy(scfg.get("true_dca", {}))
+        if scfg.get("tactical_dca", {}).get("enabled", False):
+            strategies["tactical_dca"] = TacticalDCAStrategy(scfg.get("tactical_dca", {}))
+        if scfg.get("rsi_dip_buyer", {}).get("enabled", False):
+            strategies["rsi_dip_buyer"] = RSIDipBuyerStrategy(scfg.get("rsi_dip_buyer", {}))
+        if scfg.get("trend_following", {}).get("enabled", False):
+            strategies["trend_following"] = TrendFollowingStrategy(scfg.get("trend_following", {}))
+        if scfg.get("breakout", {}).get("enabled", False):
+            strategies["breakout"] = BreakoutStrategy(scfg.get("breakout", {}))
+        return strategies
 
     # ── Données ────────────────────────────────────────────────────────────────
 
