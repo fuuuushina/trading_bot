@@ -20,10 +20,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import feedparser as _feedparser
+    _FEEDPARSER_OK = True
+except ImportError:
+    _FEEDPARSER_OK = False
+
+try:
+    from groq import Groq as _GroqClient
+    _GROQ_OK = True
+except ImportError:
+    _GROQ_OK = False
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -34,6 +47,12 @@ from dash import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
+
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(PROJECT_ROOT / ".env")
+except ImportError:
+    pass
 
 BOT_STATE_FILE    = PROJECT_ROOT / "data" / "dashboard" / "bot_state.json"
 ALPACA_STATE_FILE = PROJECT_ROOT / "data" / "paper_trading" / "alpaca_state.json"
@@ -91,6 +110,7 @@ TABS = [
     ("strategies", "Strategies"),
     ("portfolio",  "Portefeuille"),
     ("regime",     "Regime et IA"),
+    ("analyse",    "Analyse Groq"),
 ]
 
 # Cache yfinance pour ne pas refetcher a chaque refresh
@@ -117,6 +137,94 @@ def read_alpaca_state() -> dict:
     except Exception:
         pass
     return {}
+
+
+_NEWS_FEEDS = [
+    ("FXStreet",       "https://www.fxstreet.com/rss/news"),
+    ("Investing.com",  "https://www.investing.com/rss/news_301.rss"),
+]
+_NEWS_KEYWORDS = [
+    "eur", "usd", "euro", "dollar", "ecb", "fed", "bce", "rate", "taux",
+    "inflation", "forex", "eurusd", "eur/usd", "interest",
+]
+
+
+def fetch_forex_news(max_items: int = 10) -> list[dict]:
+    """Fetch recent EUR/USD-relevant news from free RSS feeds."""
+    if not _FEEDPARSER_OK:
+        return []
+    articles: list[dict] = []
+    for source, url in _NEWS_FEEDS:
+        try:
+            d = _feedparser.parse(url)
+            for entry in d.entries[:25]:
+                title = entry.get("title", "")
+                if any(kw in title.lower() for kw in _NEWS_KEYWORDS):
+                    articles.append({
+                        "title": title,
+                        "source": source,
+                        "published": entry.get("published", entry.get("updated", "")),
+                        "url": entry.get("link", ""),
+                        "summary": (entry.get("summary", "") or "")[:200],
+                    })
+        except Exception:
+            pass
+    articles.sort(key=lambda x: x.get("published", ""), reverse=True)
+    return articles[:max_items]
+
+
+def call_groq_analysis(news_items: list[dict], eur_data: dict, market_data: dict) -> str:
+    """Call Groq API: synthesise current EUR/USD technicals + news headlines."""
+    if not _GROQ_OK:
+        return "Module Groq non disponible (pip install groq)."
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        return "GROQ_API_KEY absente de l'environnement."
+
+    price = float(eur_data.get("price", 0) or 0)
+    rsi   = float(eur_data.get("rsi_14", 50) or 50)
+    ema9  = float(eur_data.get("ema_9", 0) or 0)
+    ema21 = float(eur_data.get("ema_21", 0) or 0)
+    atr   = float(eur_data.get("atr_14", 0) or 0)
+    bb_u  = float(eur_data.get("bb_upper", 0) or 0)
+    bb_l  = float(eur_data.get("bb_lower", 0) or 0)
+    regime = market_data.get("regime", "unknown")
+
+    trend_txt = "haussière" if ema9 > ema21 else "baissière"
+    news_text = "\n".join(
+        f"- [{a['source']}] {a['title']}" for a in news_items
+    ) or "Aucune news disponible."
+
+    prompt = f"""Tu es un analyste forex expert EUR/USD. Analyse les données suivantes et donne une interprétation pratique pour un trader intraday (horizons 1–4h).
+
+=== SITUATION TECHNIQUE (5 min) ===
+Prix EUR/USD : {price:.5f}
+EMA 9 / 21  : {ema9:.5f} / {ema21:.5f}  → tendance {trend_txt}
+RSI(14)     : {rsi:.1f}
+ATR(14)     : {atr*10000:.1f} pips
+Bollinger   : haut {bb_u:.5f}  bas {bb_l:.5f}
+Régime bot  : {regime}
+
+=== NEWS RÉCENTES (EUR/USD) ===
+{news_text}
+
+Réponds en français, sois direct et concis :
+1. Impact des news sur EUR/USD (haussier / baissier / neutre) — explique pourquoi en 1-2 phrases
+2. Biais directionnel à court terme
+3. Niveau-clé à surveiller (support ou résistance)
+4. Ce que le trader doit faire maintenant (attendre, acheter sur repli, vendre, etc.)"""
+
+    try:
+        client = _GroqClient(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.25,
+            max_tokens=500,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as exc:
+        return f"Erreur Groq : {str(exc)[:200]}"
 
 
 def bot_freshness(state: dict) -> str:
@@ -1254,9 +1362,496 @@ def page_regime(state: dict) -> html.Div:
     return html.Div([regime_card, analysis_card, news_card])
 
 
+# ── Page : Analyse Groq ──────────────────────────────────────────────────────
+
+def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> html.Div:
+    """
+    Page dédiée à l'analyse Groq/LLM avec :
+      - Commentaire Groq complet et mis en valeur
+      - Niveaux techniques clés EUR/USD
+      - Journal des décisions du bot (pourquoi il trade ou pas)
+      - Prochaines fenêtres de trading
+    """
+    mkt  = state.get("market", {})
+    eur  = state.get("eurusd", {})
+    sigs = state.get("recent_signals", [])
+    port = state.get("portfolio", {})
+    alp_targets = alpaca.get("targets", {})
+
+    regime    = mkt.get("regime", "unknown")
+    regime_fr = mkt.get("regime_fr", "Inconnu")
+    reg_col   = REGIME_COLOR.get(regime, C_MUTED)
+    reg_icon  = REGIME_ICON.get(regime, "?")
+    fresh     = bot_freshness(state)
+    cycle     = state.get("cycle_count", 0)
+
+    # ── 1. Barre de statut bot ────────────────────────────────────────────
+    status_colors = {
+        "live":    (C_GREEN, "#f0fff4", "Bot actif"),
+        "delayed": (C_YELLOW, "#fffff0", "Données récentes"),
+        "offline": (C_RED, "#fff5f5", "Bot hors ligne"),
+    }
+    sc, sbg, stxt = status_colors[fresh]
+    status_bar = html.Div([
+        html.Span(f"● {stxt}", style={"fontWeight": "800", "color": sc}),
+        html.Span(f"  |  Cycle #{cycle}", style={"color": C_MUTED}),
+        html.Span(f"  |  Régime : {reg_icon} {regime_fr}", style={"color": reg_col, "fontWeight": "700"}),
+        html.Span(
+            f"  |  MàJ : {state.get('last_update', '—')}",
+            style={"color": C_MUTED, "fontSize": "12px"},
+        ),
+    ], style={
+        "background": sbg, "border": f"1px solid {sc}30",
+        "borderRadius": "8px", "padding": "10px 16px", "marginBottom": "16px",
+        "fontSize": "13px", "display": "flex", "flexWrap": "wrap", "gap": "4px",
+    })
+
+    # ── 2. News EUR/USD en direct ─────────────────────────────────────────
+    news_items = fetch_forex_news(max_items=10)
+
+    def sentiment_badge(title: str) -> tuple[str, str]:
+        t = title.lower()
+        bull = any(w in t for w in ["rise", "surge", "gain", "strong", "hawkish", "hausse", "monte", "haussier", "up"])
+        bear = any(w in t for w in ["fall", "drop", "weak", "dovish", "baisse", "chute", "bearish", "down", "fear", "crisis"])
+        if bull and not bear:
+            return "HAUSSIER", C_GREEN
+        if bear and not bull:
+            return "BAISSIER", C_RED
+        return "NEUTRE", C_MUTED
+
+    news_cards = []
+    for art in news_items:
+        label, lcol = sentiment_badge(art["title"])
+        pub_raw = art.get("published", "")
+        pub_short = pub_raw[5:22] if len(pub_raw) > 10 else pub_raw
+        news_cards.append(html.Div([
+            html.Div([
+                html.Span(art["source"], style={
+                    "fontSize": "10px", "fontWeight": "700", "color": C_ACCENT,
+                    "background": "#ebf8ff", "borderRadius": "4px",
+                    "padding": "2px 7px", "marginRight": "8px",
+                }),
+                html.Span(pub_short, style={"fontSize": "10px", "color": C_MUTED}),
+                html.Span(label, style={
+                    "fontSize": "10px", "fontWeight": "800", "color": lcol,
+                    "marginLeft": "8px", "background": f"{lcol}15",
+                    "borderRadius": "4px", "padding": "2px 7px",
+                }),
+            ], style={"marginBottom": "4px"}),
+            html.Div(art["title"], style={
+                "fontSize": "13px", "lineHeight": "1.5", "color": C_TEXT, "fontWeight": "500",
+            }),
+        ], style={
+            "padding": "10px 14px", "borderBottom": f"1px solid {C_BORDER}",
+        }))
+
+    if not news_cards:
+        news_cards = [html.Div(
+            "Aucune news EUR/USD trouvée (vérifiez la connexion internet).",
+            style={"color": C_MUTED, "padding": "20px", "textAlign": "center", "fontSize": "13px"},
+        )]
+
+    news_section = html.Div([
+        html.Div([
+            html.Div([
+                html.Span("Actualités EUR/USD", style={
+                    "fontSize": "16px", "fontWeight": "900", "color": C_TEXT,
+                }),
+                html.Span(f"  {len(news_items)} titres", style={
+                    "fontSize": "12px", "color": C_MUTED, "marginLeft": "8px",
+                }),
+            ]),
+            html.Div("mis à jour toutes les 15s", style={
+                "fontSize": "11px", "color": C_MUTED, "fontStyle": "italic",
+            }),
+        ], style={
+            "display": "flex", "justifyContent": "space-between", "alignItems": "center",
+            "marginBottom": "12px", "paddingBottom": "10px", "borderBottom": f"1px solid {C_BORDER}",
+        }),
+        html.Div(news_cards, style={"maxHeight": "340px", "overflowY": "auto"}),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+    })
+
+    # ── 3. Analyse Groq interactive ───────────────────────────────────────
+    groq_display = groq_live or ""
+    groq_btn_section = html.Div([
+        html.Div([
+            html.Div([
+                html.Span("Analyse IA en temps réel", style={
+                    "fontSize": "16px", "fontWeight": "900", "color": C_PURPLE,
+                }),
+                html.Span("  Groq · Llama-3.3-70B", style={
+                    "fontSize": "12px", "color": C_MUTED, "marginLeft": "8px",
+                }),
+            ]),
+            html.Button("Analyser avec Groq", id="btn-groq-analyse",
+                n_clicks=0,
+                style={
+                    "background": C_PURPLE, "color": "#fff", "border": "none",
+                    "borderRadius": "8px", "padding": "9px 20px",
+                    "fontWeight": "800", "fontSize": "13px", "cursor": "pointer",
+                    "boxShadow": "0 2px 8px rgba(128,90,213,0.25)",
+                }),
+        ], style={
+            "display": "flex", "justifyContent": "space-between", "alignItems": "center",
+            "marginBottom": "14px", "paddingBottom": "10px", "borderBottom": f"1px solid {C_BORDER}",
+        }),
+        html.Div(
+            groq_display or "Cliquez sur « Analyser avec Groq » pour obtenir une interprétation IA des news et de la situation technique actuelle.",
+            id="groq-live-display",
+            style={
+                "fontSize": "15px", "lineHeight": "1.9", "color": C_TEXT if groq_display else C_MUTED,
+                "background": "#f9f9ff" if groq_display else "#fafafa",
+                "borderRadius": "10px", "padding": "18px 20px",
+                "borderLeft": f"4px solid {C_PURPLE}",
+                "fontStyle": "normal" if groq_display else "italic",
+                "whiteSpace": "pre-wrap",
+            },
+        ),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "20px 22px", "marginBottom": "16px",
+        "boxShadow": "0 2px 8px rgba(128,90,213,0.08)",
+    })
+
+    # ── 4. Analyse Groq quotidienne (du bot) ─────────────────────────────
+    analyst     = mkt.get("analyst_summary", "")
+    risks_list  = mkt.get("key_risks", [])
+    opps_list   = mkt.get("opportunities", [])
+    trend_map   = {"positive": ("Haussier", C_GREEN), "negative": ("Baissier", C_RED),
+                   "neutral": ("Neutre", C_MUTED)}
+    trend_txt, trend_col = trend_map.get(mkt.get("trend", "neutral"), ("Neutre", C_MUTED))
+
+    groq_section = html.Div([
+        # En-tête
+        html.Div([
+            html.Div([
+                html.Span("Analyse IA", style={
+                    "fontSize": "18px", "fontWeight": "900", "color": C_PURPLE,
+                }),
+                html.Span(" — Groq Llama 3.3 70B", style={
+                    "fontSize": "13px", "color": C_MUTED, "marginLeft": "8px",
+                }),
+            ]),
+            html.Div([
+                html.Span("Tendance : ", style={"color": C_MUTED, "fontSize": "13px"}),
+                html.Span(trend_txt, style={
+                    "color": trend_col, "fontWeight": "900", "fontSize": "15px",
+                }),
+            ]),
+        ], style={"display": "flex", "justifyContent": "space-between",
+                  "alignItems": "center", "marginBottom": "14px",
+                  "paddingBottom": "10px", "borderBottom": f"1px solid {C_BORDER}"}),
+
+        # Texte principal
+        html.Div(
+            analyst or "L'analyse Groq n'est pas encore disponible. Elle se déclenche automatiquement une fois par jour. Relancez le bot pour forcer un cycle.",
+            style={
+                "fontSize": "15px", "lineHeight": "1.85", "color": C_TEXT,
+                "background": "#f9f9ff", "borderRadius": "10px",
+                "padding": "18px 20px", "marginBottom": "16px",
+                "borderLeft": f"4px solid {C_PURPLE}",
+                "fontStyle": "normal" if analyst else "italic",
+                "color": C_TEXT if analyst else C_MUTED,
+            },
+        ),
+
+        # Risques et Opportunités
+        html.Div([
+            html.Div([
+                html.Div([
+                    html.Span("⚠ ", style={"fontSize": "16px"}),
+                    html.Span("Risques identifiés", style={"fontWeight": "800", "fontSize": "13px"}),
+                ], style={"marginBottom": "10px", "color": C_RED}),
+                html.Div(
+                    [html.Div([
+                        html.Span("• ", style={"color": C_RED, "fontWeight": "800"}),
+                        html.Span(r, style={"fontSize": "13px", "lineHeight": "1.6"}),
+                    ], style={"marginBottom": "6px"}) for r in (risks_list or ["Aucun risque identifié"])],
+                ),
+            ], style={
+                "background": "#fff5f5", "borderRadius": "10px", "padding": "16px",
+                "flex": "1", "border": f"1px solid {C_RED}20",
+            }),
+            html.Div([
+                html.Div([
+                    html.Span("✓ ", style={"fontSize": "16px"}),
+                    html.Span("Opportunités", style={"fontWeight": "800", "fontSize": "13px"}),
+                ], style={"marginBottom": "10px", "color": C_GREEN}),
+                html.Div(
+                    [html.Div([
+                        html.Span("• ", style={"color": C_GREEN, "fontWeight": "800"}),
+                        html.Span(o, style={"fontSize": "13px", "lineHeight": "1.6"}),
+                    ], style={"marginBottom": "6px"}) for o in (opps_list or ["Aucune opportunité identifiée"])],
+                ),
+            ], style={
+                "background": "#f0fff4", "borderRadius": "10px", "padding": "16px",
+                "flex": "1", "border": f"1px solid {C_GREEN}20",
+            }),
+        ], style={"display": "flex", "gap": "14px"}),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "20px 22px", "marginBottom": "16px",
+        "boxShadow": "0 2px 8px rgba(128,90,213,0.08)",
+    })
+
+    # ── 5. Niveaux techniques EUR/USD ─────────────────────────────────────
+    price  = float(eur.get("price", 0) or 0)
+    ema9   = float(eur.get("ema_9", 0) or 0)
+    ema21  = float(eur.get("ema_21", 0) or 0)
+    rsi_v  = float(eur.get("rsi_14", 50) or 50)
+    atr_v  = float(eur.get("atr_14", 0) or 0)
+    bb_u   = float(eur.get("bb_upper", 0) or 0)
+    bb_m   = float(eur.get("bb_middle", 0) or 0)
+    bb_l   = float(eur.get("bb_lower", 0) or 0)
+
+    def level_row(label: str, value: str, note: str, color: str = C_TEXT) -> html.Div:
+        return html.Div([
+            html.Div(label, style={"fontSize": "12px", "color": C_MUTED, "minWidth": "140px"}),
+            html.Div(value, style={"fontSize": "14px", "fontWeight": "800", "color": color, "minWidth": "120px"}),
+            html.Div(note, style={"fontSize": "12px", "color": C_MUTED}),
+        ], style={"display": "flex", "alignItems": "center", "gap": "16px",
+                  "padding": "8px 0", "borderBottom": f"1px solid {C_BORDER}"})
+
+    ema_col  = C_GREEN if ema9 > ema21 else C_RED
+    ema_note = "EMA 9 au-dessus — tendance haussière court terme" if ema9 > ema21 else "EMA 9 en-dessous — tendance baissière court terme"
+    rsi_note = "Surachat — possible retournement baissier" if rsi_v > 70 else ("Survente — possible rebond haussier" if rsi_v < 30 else "Zone neutre — pas d'extrême")
+    rsi_col  = C_RED if rsi_v > 70 else (C_GREEN if rsi_v < 30 else C_MUTED)
+    bb_note  = "Position dans les bandes de Bollinger"
+    if price and bb_u and bb_l:
+        bb_pct = (price - bb_l) / (bb_u - bb_l) * 100 if (bb_u - bb_l) > 0 else 50
+        bb_note = f"Dans la bande à {bb_pct:.0f}% (0%=bas, 100%=haut)"
+    atr_pips = atr_v * 10000 if atr_v else 0
+
+    tech_section = html.Div([
+        html.Div("Niveaux techniques EUR/USD", style={
+            "fontWeight": "900", "fontSize": "14px", "color": C_TEXT,
+            "marginBottom": "12px",
+        }),
+        level_row("Prix actuel",         f"{price:.5f}" if price else "—",    "Dernier prix 5 minutes"),
+        level_row("EMA 9 / EMA 21",      f"{ema9:.5f} / {ema21:.5f}" if ema9 else "—", ema_note, ema_col),
+        level_row("RSI (14)",            f"{rsi_v:.1f}",                        rsi_note, rsi_col),
+        level_row("ATR (14)",            f"{atr_pips:.1f} pips" if atr_pips else "—", "Amplitude moyenne des mouvements"),
+        level_row("Bollinger haut",      f"{bb_u:.5f}" if bb_u else "—",       "Résistance dynamique — zone de vente potentielle"),
+        level_row("Bollinger moyen",     f"{bb_m:.5f}" if bb_m else "—",       "Moyenne 20 périodes — objectif de retour"),
+        level_row("Bollinger bas",       f"{bb_l:.5f}" if bb_l else "—",       "Support dynamique — zone d'achat potentielle"),
+        level_row("Stop suggéré (ATR×1.5)", f"{atr_v*1.5*10000:.1f} pips" if atr_v else "—", "Distance stop-loss type intraday"),
+        level_row("Objectif (ATR×2.5)", f"{atr_v*2.5*10000:.1f} pips" if atr_v else "—", "Distance take-profit type intraday"),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+    })
+
+    # ── 6. Journal des décisions du bot ──────────────────────────────────
+    def decision_icon(action: str) -> tuple[str, str]:
+        return {
+            "EXECUTE": ("✓", C_GREEN),
+            "BLOCK":   ("✗", C_ORANGE),
+            "NO_TRADE":("—", C_MUTED),
+            "KILL":    ("⚠", C_RED),
+        }.get(action.upper(), ("?", C_MUTED))
+
+    journal_rows = []
+    for sig in reversed(sigs[-20:] if sigs else []):
+        action = sig.get("action", "")
+        icon, icol = decision_icon(action)
+        t      = str(sig.get("time", "—"))[:16]
+        strat  = sig.get("strategy", "").replace("intraday_", "")
+        signal = sig.get("signal", "")
+        reason = str(sig.get("reason", ""))
+        conf   = float(sig.get("confidence", 0) or 0)
+
+        journal_rows.append(html.Div([
+            html.Span(icon, style={
+                "fontSize": "16px", "color": icol,
+                "minWidth": "22px", "textAlign": "center",
+            }),
+            html.Div([
+                html.Div([
+                    html.Span(t, style={"color": C_MUTED, "fontSize": "11px", "marginRight": "10px"}),
+                    signal_badge_el(action or signal or "—"),
+                    html.Span(f"  {strat}", style={"color": C_ACCENT, "fontWeight": "700", "fontSize": "12px"}),
+                    html.Span(f"  conf: {conf*100:.0f}%", style={"color": C_MUTED, "fontSize": "11px"}) if conf else None,
+                ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap", "gap": "4px"}),
+                html.Div(reason, style={
+                    "fontSize": "12px", "color": C_MUTED, "marginTop": "3px",
+                    "fontFamily": "monospace", "lineHeight": "1.5",
+                }),
+            ], style={"flex": "1"}),
+        ], style={
+            "display": "flex", "gap": "12px", "padding": "10px 0",
+            "borderBottom": f"1px solid {C_BORDER}", "alignItems": "flex-start",
+        }))
+
+    if not journal_rows:
+        journal_rows = [html.Div([
+            html.Div("Aucune décision enregistrée pour le moment.", style={
+                "color": C_MUTED, "padding": "20px", "textAlign": "center", "fontSize": "13px",
+            }),
+            html.Div("Le bot génère des décisions à chaque cycle (toutes les 5 min).", style={
+                "color": C_MUTED, "textAlign": "center", "fontSize": "12px",
+            }),
+        ])]
+
+    journal_section = html.Div([
+        html.Div(f"Journal des décisions ({len(sigs)} entrées)", style={
+            "fontWeight": "900", "fontSize": "14px", "color": C_TEXT,
+            "marginBottom": "12px",
+        }),
+        html.Div(journal_rows),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+    })
+
+    # ── 7. Prochaines fenêtres de trading ────────────────────────────────
+    from datetime import timedelta
+    now_utc = datetime.now(timezone.utc)
+    h, m = now_utc.hour, now_utc.minute
+    total_min = h * 60 + m
+
+    def _mins_to_next(target_min: int) -> str:
+        delta = target_min - total_min
+        if delta < 0:
+            delta += 24 * 60
+        if delta == 0:
+            return "maintenant"
+        hrs, mins = divmod(delta, 60)
+        return f"dans {hrs}h{mins:02d}" if hrs else f"dans {mins} min"
+
+    windows = [
+        ("Londres",  7*60,      9*60+30,  "#38a169",
+         "Première heure — volatilité élevée, cassures fréquentes"),
+        ("New York", 13*60+30,  16*60,    "#3182ce",
+         "Ouverture US — chevauchement London+NY, meilleure liquidité"),
+    ]
+
+    session_rows = []
+    for name, start, end, col, desc in windows:
+        if start <= total_min < end:
+            status = "ACTIVE MAINTENANT"
+            time_txt = f"Ferme {_mins_to_next(end)}"
+        else:
+            status = _mins_to_next(start)
+            time_txt = f"Durée : {(end-start)//60}h{(end-start)%60:02d}"
+        is_active = start <= total_min < end
+        session_rows.append(html.Div([
+            html.Div([
+                html.Div(name, style={"fontWeight": "800", "fontSize": "14px", "color": col}),
+                html.Div(desc, style={"fontSize": "12px", "color": C_MUTED}),
+            ], style={"flex": "1"}),
+            html.Div([
+                html.Div(status, style={
+                    "fontWeight": "900", "fontSize": "13px",
+                    "color": col if is_active else C_TEXT,
+                    "background": f"{col}15" if is_active else "#f7fafc",
+                    "borderRadius": "8px", "padding": "6px 14px",
+                    "border": f"1px solid {col}30",
+                }),
+                html.Div(time_txt, style={"fontSize": "11px", "color": C_MUTED, "marginTop": "4px", "textAlign": "center"}),
+            ], style={"textAlign": "center"}),
+        ], style={
+            "display": "flex", "alignItems": "center", "gap": "16px",
+            "padding": "12px 0", "borderBottom": f"1px solid {C_BORDER}",
+        }))
+
+    # Explication pourquoi bot ne trade pas maintenant
+    ema9_ok   = ema9 and ema21 and abs(ema9 - ema21) > 0  # EMA cross happened
+    rsi_ok    = rsi_v < 35 or rsi_v > 65
+    session_active = any(s <= total_min < e for (_, s, e, _, _) in windows)
+    bb_ok     = price and bb_l and bb_u and (price <= bb_l * 1.001 or price >= bb_u * 0.999)
+
+    blockers = []
+    if not session_active:
+        next_s = min(
+            (_mins_to_next(s), name)
+            for name, s, e, _, _ in windows
+            if not (s <= total_min < e)
+        )
+        blockers.append(f"Aucune session active — {next_s[1]} ouvre {next_s[0]}")
+    if ema9 and ema21:
+        blockers.append(f"EMA cross : EMA9={ema9:.5f} vs EMA21={ema21:.5f} — le prochain signal se déclenchera au prochain croisement")
+    if not rsi_ok:
+        blockers.append(f"RSI={rsi_v:.1f} en zone neutre (besoin de <35 ou >65 pour Bollinger RSI)")
+    if not blockers:
+        blockers.append("Conditions en cours d'évaluation...")
+
+    why_section = html.Div([
+        html.Div("Pourquoi le bot attend-il ?", style={
+            "fontWeight": "900", "fontSize": "14px", "color": C_TEXT, "marginBottom": "10px",
+        }),
+        html.Div([
+            html.Div([
+                html.Span("⏳ ", style={"fontSize": "14px"}),
+                html.Span(b, style={"fontSize": "13px", "lineHeight": "1.6", "color": C_TEXT}),
+            ], style={"marginBottom": "6px"})
+            for b in blockers
+        ], style={
+            "background": "#f7fafc", "borderRadius": "8px",
+            "padding": "14px 16px", "marginBottom": "14px",
+        }),
+        html.Div([
+            html.Div("Prochaines fenêtres d'opportunité (UTC)", style={
+                "fontWeight": "800", "fontSize": "13px",
+                "color": C_TEXT, "marginBottom": "8px",
+            }),
+            html.Div(session_rows),
+        ]),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+    })
+
+    # ── 8. Etat bot résumé (Alpaca) ───────────────────────────────────────
+    alp_initial = float(alpaca.get("initial_capital", 0))
+    alp_equity  = float(alpaca.get("equity_history", [{}])[-1].get("equity", alp_initial)) if alpaca.get("equity_history") else alp_initial
+    alp_pnl     = sum(float(x.get("pnl", 0)) for x in alpaca.get("closed_events", []))
+
+    bot_status_section = html.Div([
+        html.Div("État des comptes", style={
+            "fontWeight": "900", "fontSize": "14px", "color": C_TEXT,
+            "marginBottom": "12px",
+        }),
+        html.Div([
+            html.Div([
+                html.Div("EUR/USD Bot (intraday)", style={"fontWeight": "700", "color": C_ACCENT, "marginBottom": "6px"}),
+                html.Div(f"Capital : ${float(port.get('total_equity', 10000)):,.2f}", style={"fontSize": "13px"}),
+                html.Div(f"Positions : {port.get('num_positions', 0)}", style={"fontSize": "13px"}),
+                html.Div(f"Cash : ${float(port.get('cash', 0)):,.2f}", style={"fontSize": "13px"}),
+            ], style={
+                "background": "#ebf8ff", "borderRadius": "10px",
+                "padding": "14px 16px", "flex": "1", "border": f"1px solid {C_ACCENT}20",
+            }),
+            html.Div([
+                html.Div("Compte Alpaca Paper", style={"fontWeight": "700", "color": C_ALPACA, "marginBottom": "6px"}),
+                html.Div(f"Capital : ${alp_equity:,.2f}", style={"fontSize": "13px"}),
+                html.Div(f"Positions : {len(alp_targets)} ({', '.join(alp_targets.keys()) if alp_targets else 'aucune'})", style={"fontSize": "13px"}),
+                html.Div(f"P&L réalisé : ${alp_pnl:+,.2f}", style={"fontSize": "13px", "color": C_GREEN if alp_pnl >= 0 else C_RED}),
+            ], style={
+                "background": "#f3f0ff", "borderRadius": "10px",
+                "padding": "14px 16px", "flex": "1", "border": f"1px solid {C_ALPACA}20",
+            }),
+        ], style={"display": "flex", "gap": "14px"}),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px",
+    })
+
+    return html.Div([
+        status_bar,
+        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"}, children=[
+            html.Div([news_section, groq_section]),
+            html.Div([groq_btn_section, tech_section, why_section, bot_status_section]),
+        ]),
+        journal_section,
+    ])
+
+
 # ── Rendu d'un onglet ─────────────────────────────────────────────────────────
 
-def render_tab(tab: str, state: dict, alpaca: dict) -> html.Div:
+def render_tab(tab: str, state: dict, alpaca: dict, groq_live: str | None = None) -> html.Div:
     try:
         if tab == "overview":
             return page_overview(state, alpaca)
@@ -1268,6 +1863,8 @@ def render_tab(tab: str, state: dict, alpaca: dict) -> html.Div:
             return page_portfolio(state, alpaca)
         if tab == "regime":
             return page_regime(state)
+        if tab == "analyse":
+            return page_analyse(state, alpaca, groq_live=groq_live)
     except Exception as exc:
         return html.Div([
             html.Div("Erreur lors du rendu de la page", style={
@@ -1339,6 +1936,7 @@ body{background:#f0f4f8;color:#1a202c;font-family:'Inter',system-ui,sans-serif;f
     app.layout = html.Div([
         dcc.Interval(id="interval", interval=REFRESH_MS, n_intervals=0),
         dcc.Store(id="active-tab", data="overview"),
+        dcc.Store(id="groq-live-store", data=""),
 
         # Topbar
         html.Div(className="topbar", children=[
@@ -1371,6 +1969,7 @@ body{background:#f0f4f8;color:#1a202c;font-family:'Inter',system-ui,sans-serif;f
         [Input(f"tab-{t_id}", "n_clicks") for t_id, _ in TABS],
         Input("interval", "n_intervals"),
         State("active-tab", "data"),
+        State("groq-live-store", "data"),
         prevent_initial_call=False,
     )
     def main_update(*args):
@@ -1378,7 +1977,9 @@ body{background:#f0f4f8;color:#1a202c;font-family:'Inter',system-ui,sans-serif;f
         # args[0..n_tabs-1] = n_clicks des boutons
         # args[n_tabs]      = n_intervals
         # args[n_tabs+1]    = active-tab (State)
+        # args[n_tabs+2]    = groq-live-store (State)
         current_tab = args[n_tabs + 1] or "overview"
+        groq_result = args[n_tabs + 2] or ""
 
         ctx = callback_context
         triggered = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else ""
@@ -1404,7 +2005,7 @@ body{background:#f0f4f8;color:#1a202c;font-family:'Inter',system-ui,sans-serif;f
         time_txt   = (f"MàJ : {state.get('last_update', '—')} | "
                       f"Cycle #{state.get('cycle_count', 0)}")
 
-        page = render_tab(active_tab, state, alpaca)
+        page = render_tab(active_tab, state, alpaca, groq_live=groq_result)
         return page, active_tab, badge_txt, badge_cls, price_txt, regime_txt, time_txt
 
     # ── Callback styles des onglets ────────────────────────────────────────
@@ -1416,6 +2017,24 @@ body{background:#f0f4f8;color:#1a202c;font-family:'Inter',system-ui,sans-serif;f
         active = active or "overview"
         return ["tab-btn active" if t_id == active else "tab-btn"
                 for t_id, _ in TABS]
+
+    # ── Callback bouton Groq ───────────────────────────────────────────────
+    @app.callback(
+        Output("groq-live-store", "data"),
+        Input("btn-groq-analyse", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def trigger_groq(n_clicks):
+        if not n_clicks:
+            return no_update
+        state  = read_bot_state()
+        news   = fetch_forex_news(max_items=10)
+        result = call_groq_analysis(
+            news_items=news,
+            eur_data=state.get("eurusd", {}),
+            market_data=state.get("market", {}),
+        )
+        return result
 
     return app
 
