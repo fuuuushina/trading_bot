@@ -80,7 +80,7 @@ STRATEGY_INFO = {
     },
     "intraday_session_breakout": {
         "name": "Cassure de Session", "icon": "▶", "color": "#38a169",
-        "desc": "Entre dans le sens de la cassure du range pré-session à l'ouverture de Londres (07h) ou New York (13h30 UTC).",
+        "desc": "Entre dans le sens de la cassure du range pré-session. Fenêtres actives : Londres 07h00-09h30 UTC, New York 13h30-16h00 UTC.",
         "when": "Ouverture London / NY",
     },
 }
@@ -712,14 +712,18 @@ def page_eurusd(state: dict) -> html.Div:
     # Sessions
     now_utc   = datetime.now(timezone.utc)
     total_min = now_utc.hour * 60 + now_utc.minute
+    # Fenêtres exactes utilisées par intraday_session_breakout.py
     sessions  = [
-        ("Londres",  7*60,      16*60,      "#38a169"),
-        ("New York", 13*60+30,  20*60,      "#3182ce"),
-        ("Asie",     22*60,     24*60+8*60, "#805ad5"),
+        ("Londres",  7*60,      9*60+30,  "#38a169"),   # 07:00-09:30 UTC
+        ("New York", 13*60+30,  16*60,    "#3182ce"),   # 13:30-16:00 UTC
+        ("Asie",     22*60,     8*60,     "#805ad5"),   # 22:00-08:00 UTC (chevauche minuit)
     ]
     sess_items = []
     for name, start, end, col in sessions:
-        active = start <= total_min < end
+        if start < end:
+            active = start <= total_min < end
+        else:  # session traverse minuit (ex: Asie 22h-08h)
+            active = total_min >= start or total_min < end
         sess_items.append(html.Div([
             html.Div("●", style={"color": col if active else "#cbd5e0", "fontSize": "20px"}),
             html.Div(name, style={"fontWeight": "700", "fontSize": "13px",

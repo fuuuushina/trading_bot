@@ -139,6 +139,12 @@ strategies:
 # ema_cross active in all regimes except panic
 
 regime_strategy_map:
+  # Fallback quand le régime est ambigu — stratégies défensives seulement
+  unknown:
+    long_term: []
+    swing: []
+    intraday: ["intraday_ema_cross", "intraday_bollinger_rsi"]
+
   bull_trend:
     long_term: ["true_dca"]
     swing: ["trend_following", "breakout", "rsi_dip_buyer"]
