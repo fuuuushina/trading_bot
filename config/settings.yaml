@@ -41,6 +41,9 @@ universe:
     - "JPM"
     - "XLE"
   intraday:
+    - "EURUSD=X"    # EUR/USD forex — fetched at 5min via yfinance
+  # Equity intraday (disabled for MVP forex mode — re-enable when needed)
+  intraday_equity:
     - "SPY"
     - "QQQ"
     - "AAPL"
@@ -58,16 +61,16 @@ market_hours:
 # ---- Broker ----
 broker:
   paper:
-    provider: "alpaca"             # local | alpaca
-    initial_capital: 500.0
-    execution_enabled: true        # Alpaca PAPER orders only
-    min_position_usd: 10.0
-    max_position_usd: 100.0
-    watchlist: ["SPY", "QQQ"]
-    refresh_seconds: 60
-    commission_per_trade: 0.0       # flat fee USD
-    commission_pct: 0.0             # 0 = flat only
-    slippage_pct: 0.001             # 0.1%
+    provider: "local"              # local PaperBroker — forex not supported by Alpaca
+    initial_capital: 10000.0       # EUR/USD trades in larger notional (1 lot = 100k)
+    execution_enabled: true
+    min_position_usd: 100.0        # min order size
+    max_position_usd: 2000.0       # max 20% of capital per trade
+    watchlist: ["EURUSD=X"]
+    refresh_seconds: 300           # 5 min refresh
+    commission_per_trade: 0.0
+    commission_pct: 0.0
+    slippage_pct: 0.0002           # 0.02% = ~2 pips spread for EUR/USD
   live:
     name: "alpaca"                  # alpaca | ibkr
     api_key_env: "BROKER_API_KEY"
@@ -111,21 +114,21 @@ alerts:
 
 # ---- Market Watcher ----
 market_watcher:
-  mvp_mode: true                  # true = cycle unique 15 min pour tous les types
-  mvp_cycle_seconds: 900          # 15 min en MVP
-  intraday_interval_seconds: 300  # 5 min (actif si mvp_mode=false)
+  mvp_mode: true                  # true = cycle unique pour tous les types
+  mvp_cycle_seconds: 300          # 5 min — synchronisé avec les bars EUR/USD
+  intraday_interval_seconds: 300  # 5 min
   hourly_interval_seconds: 3600   # 1h
   daily_interval_seconds: 86400   # 24h
   llm_interval_seconds: 86400     # LLM Market Analyst 1x/jour max
+  # Fetch config for intraday tickers (EURUSD=X, etc.)
+  intraday_period: "5d"           # yfinance period for 5min data (max 60d)
+  intraday_interval: "5m"         # yfinance interval for intraday
 
 # ---- Market Analyst (LLM) ----
 market_analyst:
-  enabled: false            # true = appels LLM pour l'analyse marché
-  provider: "claude"        # claude | qwen
-  model: "claude-sonnet-4-6"
-  # Pour Qwen : model: "qwen-plus" ou "qwen-max"
-  # qwen_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  # API key: QWEN_API_KEY ou DASHSCOPE_API_KEY dans .env
+  enabled: true
+  provider: "groq"                        # groq | claude | qwen
+  model: "llama-3.3-70b-versatile"        # modèle Groq (gratuit)
   temperature: 0.2
   max_tokens: 800
   timeout_seconds: 20

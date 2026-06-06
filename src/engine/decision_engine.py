@@ -30,7 +30,11 @@ from src.risk.risk_manager import KillSwitchTriggered, RiskDecision, RiskManager
 from src.rules.rules_engine import RulesEngine, RulesVerdict
 from src.strategies.base import Horizon, Signal, SignalType
 from src.strategies.breakout import BreakoutStrategy
+from src.strategies.intraday_bollinger_rsi import IntradayBollingerRSIStrategy
+from src.strategies.intraday_ema_cross import IntradayEMACrossStrategy
+from src.strategies.intraday_session_breakout import IntradaySessionBreakoutStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
+from src.strategies.rsi_dip_buyer import RSIDipBuyerStrategy
 from src.strategies.tactical_dca import TacticalDCAStrategy
 from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
@@ -99,11 +103,16 @@ class DecisionEngine:
             name for name, cfg in scfg.items() if cfg.get("enabled", False)
         }
         self._strategies = {
-            "trend_following": TrendFollowingStrategy(scfg.get("trend_following", {})),
-            "mean_reversion": MeanReversionStrategy(scfg.get("mean_reversion", {})),
-            "breakout": BreakoutStrategy(scfg.get("breakout", {})),
-            "tactical_dca": TacticalDCAStrategy(scfg.get("tactical_dca", {})),
-            "true_dca": TrueDCAStrategy(scfg.get("true_dca", {})),
+            "trend_following":          TrendFollowingStrategy(scfg.get("trend_following", {})),
+            "mean_reversion":           MeanReversionStrategy(scfg.get("mean_reversion", {})),
+            "breakout":                 BreakoutStrategy(scfg.get("breakout", {})),
+            "rsi_dip_buyer":            RSIDipBuyerStrategy(scfg.get("rsi_dip_buyer", {})),
+            "tactical_dca":             TacticalDCAStrategy(scfg.get("tactical_dca", {})),
+            "true_dca":                 TrueDCAStrategy(scfg.get("true_dca", {})),
+            # Intraday forex strategies
+            "intraday_ema_cross":       IntradayEMACrossStrategy(scfg.get("intraday_ema_cross", {})),
+            "intraday_bollinger_rsi":   IntradayBollingerRSIStrategy(scfg.get("intraday_bollinger_rsi", {})),
+            "intraday_session_breakout": IntradaySessionBreakoutStrategy(scfg.get("intraday_session_breakout", {})),
         }
 
     # ------------------------------------------------------------------ #
@@ -117,6 +126,7 @@ class DecisionEngine:
         open_positions: list[dict],
         trade_history: list[dict],
         vix_series: Optional[pd.Series] = None,
+        intraday_data_map: Optional[dict[str, pd.DataFrame]] = None,
     ) -> list[DecisionRecord]:
         """
         Run one full decision cycle across all assets.
@@ -157,12 +167,14 @@ class DecisionEngine:
         raw_signals: list[Signal] = []
         df_map: dict[str, pd.DataFrame] = {}  # garde le df par asset pour _evaluate_signal
 
+        # Daily / swing / long_term strategies — run on daily data
+        daily_horizons = {k: v for k, v in active_by_horizon.items() if k != "intraday"}
         for asset, df in data_map.items():
             if df is None or df.empty:
                 continue
             df_map[asset] = df
 
-            for horizon_name, strategy_names in active_by_horizon.items():
+            for horizon_name, strategy_names in daily_horizons.items():
                 for strategy_name in strategy_names:
                     if strategy_name not in self._strategies:
                         continue
@@ -185,6 +197,36 @@ class DecisionEngine:
                         continue
 
                     raw_signals.append(raw_signal)
+
+        # Intraday strategies — run on 5min intraday data (EURUSD=X etc.)
+        intraday_strategy_names = active_by_horizon.get("intraday", [])
+        for asset, df in (intraday_data_map or {}).items():
+            if df is None or df.empty:
+                continue
+            df_map[asset] = df  # used later for _evaluate_signal
+
+            for strategy_name in intraday_strategy_names:
+                if strategy_name not in self._strategies:
+                    continue
+                if strategy_name not in self._enabled_strategies:
+                    logger.debug("Strategy disabled: %s", strategy_name)
+                    continue
+
+                strategy = self._strategies[strategy_name]
+                try:
+                    raw_signal = strategy.generate_signal(df, asset, regime_str)
+                except Exception as exc:
+                    logger.error(
+                        "Intraday strategy %s failed for %s: %s",
+                        strategy_name, asset, exc, exc_info=True
+                    )
+                    continue
+
+                if raw_signal.signal == SignalType.NO_TRADE:
+                    logger.debug("NO_TRADE: %s / %s", strategy_name, asset)
+                    continue
+
+                raw_signals.append(raw_signal)
 
         logger.info(
             "Cycle: %d raw signals from %d assets",

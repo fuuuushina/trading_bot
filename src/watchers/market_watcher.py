@@ -147,6 +147,10 @@ class MarketWatcher:
         self._last_regime: str = "unknown"
         self._cycle_count: int = 0
 
+        # Dashboard state tracking
+        self._equity_history: list[dict] = []   # {time, equity}
+        self._recent_signals: list[dict] = []   # last 100 signal decisions
+
         # Threads
         self._stop_event = Event()
         self._thread: Optional[Thread] = None
@@ -217,16 +221,20 @@ class MarketWatcher:
         # 1. Fetch données
         tickers = self._get_tickers(cycle_type)
         if not tickers:
-            logger.warning("No tickers for cycle type %s", cycle_type)
-            return None
+            # Even without daily tickers, intraday tickers may still need fetching
+            tickers = []
 
-        data_map, vix_series = self._fetch_data(tickers)
-        if not data_map:
+        data_map, intraday_map, vix_series = self._fetch_data(tickers)
+        if not data_map and not intraday_map:
             logger.error("No data fetched — skipping cycle")
             return None
 
-        # 2. Feature Engine
-        snapshot = self.feature_engine.compute(data_map, vix_series)
+        # 2. Feature Engine — daily data only (intraday_map has 5min bars, wrong scale)
+        if data_map:
+            snapshot = self.feature_engine.compute(data_map, vix_series)
+        else:
+            from src.features.feature_engine import MarketSnapshot
+            snapshot = MarketSnapshot(computed_at=now)
 
         # 3. ML Regime Model
         spy_df = data_map.get("SPY")
@@ -292,6 +300,7 @@ class MarketWatcher:
 
         decisions = self.engine.run_cycle(
             data_map=data_map,
+            intraday_data_map=intraday_map,
             portfolio_state=portfolio_state,
             open_positions=open_positions,
             trade_history=trade_history,
@@ -300,6 +309,9 @@ class MarketWatcher:
 
         # 7. Exécution des décisions approuvées
         current_prices = {t: float(df["close"].iloc[-1]) for t, df in data_map.items()}
+        # Add intraday current prices (EURUSD=X last bar)
+        for t, df in intraday_map.items():
+            current_prices[t] = float(df["close"].iloc[-1])
         self._execute_decisions(decisions, current_prices)
 
         # 8. Portfolio Watcher
@@ -307,8 +319,11 @@ class MarketWatcher:
 
         # 9. Construire l'état global
         effective_analysis = analysis or self.analyst.last_analysis
+        intraday_tickers = self._get_intraday_tickers()
+        has_only_forex = bool(intraday_tickers) and not data_map
+        market_type = "FOREX" if has_only_forex else ("MIXED" if intraday_tickers else "US_EQUITIES")
         state = MarketState(
-            market="US_EQUITIES",
+            market=market_type,
             regime=regime_prediction.label,
             regime_confidence=regime_prediction.confidence,
             regime_source=regime_prediction.source,
@@ -338,6 +353,31 @@ class MarketWatcher:
             f"{state.vix:.1f}" if state.vix else "N/A",
             len(decisions),
         )
+
+        # Track equity history + write dashboard state
+        portfolio_state = self.broker.get_portfolio_state()
+        self._equity_history.append({
+            "time": state.computed_at,
+            "equity": portfolio_state.get("total_equity", self.broker.initial_capital),
+        })
+        if len(self._equity_history) > 2000:
+            self._equity_history = self._equity_history[-2000:]
+
+        # Track recent decisions
+        for dec in decisions:
+            self._recent_signals.append({
+                "time": state.computed_at[:19],
+                "asset": dec.asset,
+                "strategy": dec.signal.strategy_name,
+                "signal": dec.signal.signal.value,
+                "confidence": round(dec.signal.confidence, 3),
+                "action": dec.final_action,
+                "reason": (dec.signal.reason or "")[:120],
+            })
+        if len(self._recent_signals) > 100:
+            self._recent_signals = self._recent_signals[-100:]
+
+        self._write_dashboard_state(state, portfolio_state, intraday_map)
         return state
 
     # ------------------------------------------------------------------ #
@@ -358,25 +398,50 @@ class MarketWatcher:
             return tickers or self.universe.all_tickers
         return self.universe.all_tickers
 
+    def _get_intraday_tickers(self) -> list[str]:
+        """Returns the list of tickers that should be fetched at 5min resolution."""
+        if self.universe is None:
+            return []
+        from src.watchers.universe_builder import WatchFrequency
+        return self.universe.tickers_for(WatchFrequency.INTRADAY)
+
     def _fetch_data(
         self,
         tickers: list[str],
-    ) -> tuple[dict[str, pd.DataFrame], Optional[pd.Series]]:
-        """Fetch les données OHLCV pour tous les tickers."""
+    ) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame], Optional[pd.Series]]:
+        """
+        Fetch OHLCV data.
+
+        Returns (daily_map, intraday_map, vix_series) where:
+          daily_map    — 1d bars for SPY/QQQ/etc. (used by FeatureEngine & RegimeModel)
+          intraday_map — 5m bars for forex tickers like EURUSD=X (used by intraday strategies)
+          vix_series   — VIX close series for regime detection
+        """
         try:
             import yfinance as yf
             from src.data.yfinance_helpers import normalize_yfinance_columns
             from src.features.indicators import compute_all_features
         except ImportError as exc:
             logger.error("Import error in _fetch_data: %s", exc)
-            return {}, None
+            return {}, {}, None
 
+        watcher_cfg    = self.cfg.get("market_watcher", {})
+        intraday_period   = watcher_cfg.get("intraday_period",   "5d")
+        intraday_interval = watcher_cfg.get("intraday_interval", "5m")
+
+        intraday_tickers = set(self._get_intraday_tickers())
         data_map: dict[str, pd.DataFrame] = {}
+        intraday_map: dict[str, pd.DataFrame] = {}
         vix_series: Optional[pd.Series] = None
 
-        clean_tickers = [t for t in tickers if not t.endswith("_5M")]
+        # --- Daily fetch (SPY, QQQ, ^VIX, etc.) ---
+        daily_tickers = [t for t in tickers if t not in intraday_tickers]
 
-        for ticker in clean_tickers:
+        # Always include SPY for regime detection when we have intraday tickers
+        if intraday_tickers and "SPY" not in daily_tickers:
+            daily_tickers.append("SPY")
+
+        for ticker in daily_tickers:
             try:
                 df = yf.download(
                     ticker, period="2y", interval="1d",
@@ -386,7 +451,6 @@ class MarketWatcher:
                     continue
                 df = normalize_yfinance_columns(df)
 
-                # VIX → gardé comme série séparée
                 if ticker == "^VIX":
                     vix_series = df["close"]
                     continue
@@ -396,7 +460,31 @@ class MarketWatcher:
             except Exception as exc:
                 logger.warning("Fetch failed for %s: %s", ticker, exc)
 
-        return data_map, vix_series
+        # --- Intraday 5min fetch (EURUSD=X, etc.) ---
+        for ticker in intraday_tickers:
+            try:
+                df = yf.download(
+                    ticker, period=intraday_period, interval=intraday_interval,
+                    auto_adjust=True, progress=False
+                )
+                if df.empty or len(df) < 30:
+                    logger.warning(
+                        "Intraday fetch for %s returned %d bars (need ≥30)",
+                        ticker, len(df)
+                    )
+                    continue
+                df = normalize_yfinance_columns(df)
+                intraday_map[ticker] = df
+                logger.debug(
+                    "Intraday %s: %d bars (%s-%s)",
+                    ticker, len(df),
+                    df.index[0].strftime("%Y-%m-%d %H:%M"),
+                    df.index[-1].strftime("%Y-%m-%d %H:%M"),
+                )
+            except Exception as exc:
+                logger.warning("Intraday fetch failed for %s: %s", ticker, exc)
+
+        return data_map, intraday_map, vix_series
 
     # ------------------------------------------------------------------ #
     # Exécution
@@ -439,6 +527,134 @@ class MarketWatcher:
                 price=signal.entry_price or 0.0,
                 strategy=signal.strategy_name,
             )
+
+    def _write_dashboard_state(
+        self,
+        state: MarketState,
+        portfolio_state: dict,
+        intraday_map: dict,
+    ) -> None:
+        """Write bot state to JSON for the live dashboard. Never raises."""
+        try:
+            import json
+            from pathlib import Path
+            from src.features.indicators import ema as _ema, rsi as _rsi, atr as _atr
+
+            out_dir = Path("data/dashboard")
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            # ---- EUR/USD indicators ----
+            eurusd: dict = {}
+            df_eur = intraday_map.get("EURUSD=X")
+            if df_eur is not None and len(df_eur) >= 25:
+                close = df_eur["close"]
+                e9  = _ema(close, 9)
+                e21 = _ema(close, 21)
+                r14 = _rsi(close, 14)
+                a14 = _atr(df_eur, 14)
+                sma20 = close.rolling(20).mean()
+                std20 = close.rolling(20).std(ddof=0)
+                bb_u = sma20 + 2.0 * std20
+                bb_l = sma20 - 2.0 * std20
+
+                current = float(close.iloc[-1])
+                prev    = float(close.iloc[-2]) if len(close) > 1 else current
+                n = min(80, len(df_eur))
+                ohlcv = [
+                    {
+                        "t": str(df_eur.index[i]),
+                        "o": round(float(df_eur["open"].iloc[i]), 5),
+                        "h": round(float(df_eur["high"].iloc[i]), 5),
+                        "l": round(float(df_eur["low"].iloc[i]), 5),
+                        "c": round(float(df_eur["close"].iloc[i]), 5),
+                        "e9":  round(float(e9.iloc[i]), 5),
+                        "e21": round(float(e21.iloc[i]), 5),
+                        "bbu": round(float(bb_u.iloc[i]), 5) if not __import__("math").isnan(float(bb_u.iloc[i])) else None,
+                        "bbl": round(float(bb_l.iloc[i]), 5) if not __import__("math").isnan(float(bb_l.iloc[i])) else None,
+                    }
+                    for i in range(-n, 0)
+                ]
+                eurusd = {
+                    "price":      round(current, 5),
+                    "change_pct": round((current / prev - 1) * 100, 4),
+                    "ema_9":      round(float(e9.iloc[-1]), 5),
+                    "ema_21":     round(float(e21.iloc[-1]), 5),
+                    "rsi_14":     round(float(r14.iloc[-1]), 2),
+                    "atr_14":     round(float(a14.iloc[-1]), 6),
+                    "bb_upper":   round(float(bb_u.iloc[-1]), 5),
+                    "bb_middle":  round(float(sma20.iloc[-1]), 5),
+                    "bb_lower":   round(float(bb_l.iloc[-1]), 5),
+                    "ohlcv":      ohlcv,
+                }
+
+            # ---- News ----
+            news_list: list[dict] = []
+            if self.news_manager and self.news_manager.enabled:
+                news_list = self.news_manager.get_latest_impacts()[:15]
+
+            _REGIME_FR = {
+                "bull_trend": "Tendance Haussiere",
+                "bear_trend": "Tendance Baissiere",
+                "range": "Marche Lateral (Range)",
+                "high_volatility": "Haute Volatilite",
+                "low_volatility": "Basse Volatilite",
+                "panic": "Panique de Marche",
+                "euphoric": "Euphorie",
+                "compression": "Compression (Attente)",
+                "breakout_expansion": "Cassure en Cours",
+                "unknown": "Inconnu",
+            }
+            _RISK_FR = {
+                "low": "Faible", "medium": "Modere",
+                "high": "Eleve", "extreme": "Extreme",
+            }
+
+            doc = {
+                "last_update":  state.computed_at[:19],
+                "is_running":   True,
+                "cycle_count":  self._cycle_count,
+                "mode":         "paper",
+                "market": {
+                    "regime":            state.regime,
+                    "regime_fr":         _REGIME_FR.get(state.regime, state.regime),
+                    "confidence":        round(state.regime_confidence, 3),
+                    "source":            state.regime_source,
+                    "risk_level":        state.risk_level,
+                    "risk_fr":           _RISK_FR.get(state.risk_level, state.risk_level),
+                    "vix":               round(state.vix, 2) if state.vix else None,
+                    "trend":             state.trend,
+                    "exposure":          round(state.recommended_exposure, 3),
+                    "analyst_summary":   state.analyst_summary,
+                    "key_risks":         state.key_risks,
+                    "opportunities":     state.opportunities,
+                },
+                "portfolio": {
+                    "initial_capital":  self.broker.initial_capital,
+                    "total_equity":     portfolio_state.get("total_equity", self.broker.initial_capital),
+                    "cash":             portfolio_state.get("cash", 0),
+                    "open_pnl":         portfolio_state.get("unrealized_pnl", 0),
+                    "realized_pnl":     portfolio_state.get("realized_pnl", 0),
+                    "total_pnl":        portfolio_state.get("unrealized_pnl", 0) + portfolio_state.get("realized_pnl", 0),
+                    "return_pct":       round(
+                        (portfolio_state.get("total_equity", self.broker.initial_capital) / self.broker.initial_capital - 1) * 100, 4
+                    ),
+                    "drawdown_pct":     portfolio_state.get("drawdown_pct", 0),
+                    "num_positions":    portfolio_state.get("open_positions", 0),
+                    "exposure_pct":     portfolio_state.get("total_exposure_pct", 0),
+                },
+                "equity_history": self._equity_history[-500:],
+                "positions":      self.broker.get_open_positions(),
+                "recent_trades":  self.broker.get_trade_history()[-50:],
+                "recent_signals": list(reversed(self._recent_signals[-30:])),
+                "news":           news_list,
+                "eurusd":         eurusd,
+            }
+
+            with open(out_dir / "bot_state.json", "w", encoding="utf-8") as fh:
+                json.dump(doc, fh, indent=2, default=str)
+
+        except Exception as exc:
+            logger.warning("Dashboard state write failed: %s", exc)
 
     def _build_news_summary(self) -> str:
         if not self.news_manager:

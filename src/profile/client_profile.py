@@ -35,6 +35,7 @@ class AssetPreferences:
     etf: bool      = True
     stocks: bool   = True
     intraday: bool = False
+    forex: bool    = False
     crypto: bool   = False
 
     def to_dict(self) -> dict:
@@ -42,6 +43,7 @@ class AssetPreferences:
             "etf": self.etf,
             "stocks": self.stocks,
             "intraday": self.intraday,
+            "forex": self.forex,
             "crypto": self.crypto,
         }
 
@@ -51,6 +53,7 @@ class AssetPreferences:
             etf=d.get("etf", True),
             stocks=d.get("stocks", True),
             intraday=d.get("intraday", False),
+            forex=d.get("forex", False),
             crypto=d.get("crypto", False),
         )
 

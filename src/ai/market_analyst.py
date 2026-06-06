@@ -307,6 +307,8 @@ class MarketAnalyst:
             return self._call_claude(system, user_prompt)
         if self.provider == "qwen":
             return self._call_qwen(system, user_prompt)
+        if self.provider == "groq":
+            return self._call_groq(system, user_prompt)
         return None
 
     def _call_claude(self, system: str, user: str) -> Optional[str]:
@@ -451,11 +453,42 @@ class MarketAnalyst:
             provider="rules",
         )
 
+    def _call_groq(self, system: str, user: str) -> Optional[str]:
+        """Groq via API compatible OpenAI — gratuit, ultra-rapide."""
+        try:
+            import requests
+            api_key = os.environ.get("GROQ_API_KEY", "")
+            if not api_key:
+                return None
+            resp = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    "max_tokens": self.max_tokens,
+                    "temperature": self.temperature,
+                },
+                timeout=self.timeout,
+            )
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"]
+            logger.debug("Groq API error %d: %s", resp.status_code, resp.text[:200])
+            return None
+        except Exception as exc:
+            logger.debug("Groq call failed: %s", exc)
+            return None
+
     def _has_api_key(self) -> bool:
         if self.provider == "claude":
             return bool(os.environ.get("ANTHROPIC_API_KEY"))
         if self.provider == "qwen":
             return bool(os.environ.get("QWEN_API_KEY") or os.environ.get("DASHSCOPE_API_KEY"))
+        if self.provider == "groq":
+            return bool(os.environ.get("GROQ_API_KEY"))
         return False
 
     @staticmethod

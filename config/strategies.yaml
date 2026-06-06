@@ -98,41 +98,80 @@ strategies:
     horizon: "intraday"
     timeframe: "5m"
 
+  # ---- Intraday Forex Strategies (EUR/USD 5min) ----
+  intraday_ema_cross:
+    enabled: true
+    horizon: "intraday"
+    timeframe: "5m"
+    ema_fast: 9
+    ema_slow: 21
+    rsi_period: 14
+    min_confidence: 0.55
+    atr_multiplier_sl: 1.5
+    atr_multiplier_tp: 2.5
+
+  intraday_bollinger_rsi:
+    enabled: true
+    horizon: "intraday"
+    timeframe: "5m"
+    bb_period: 20
+    bb_mult: 2.0
+    rsi_period: 14
+    rsi_overbought: 65
+    rsi_oversold: 35
+    min_confidence: 0.55
+    atr_multiplier_sl: 1.5
+
+  intraday_session_breakout:
+    enabled: true
+    horizon: "intraday"
+    timeframe: "5m"
+    consolidation_bars: 24         # 2h pre-session range
+    atr_buffer_mult: 0.3           # breakout confirmation buffer
+    min_confidence: 0.55
+    atr_multiplier_sl: 1.8
+    atr_multiplier_tp: 3.0
+
 # ---- Regime-to-strategy mapping ----
+# intraday strategies run on 5min forex data (EURUSD=X)
+# bollinger_rsi active in range/low_vol/compression only
+# session_breakout active in trending + breakout regimes
+# ema_cross active in all regimes except panic
+
 regime_strategy_map:
   bull_trend:
     long_term: ["true_dca"]
     swing: ["trend_following", "breakout", "rsi_dip_buyer"]
-    intraday: []
+    intraday: ["intraday_ema_cross", "intraday_session_breakout"]
   bear_trend:
     long_term: ["true_dca"]
     swing: []
-    intraday: []
+    intraday: ["intraday_ema_cross", "intraday_session_breakout"]
   range:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer"]
-    intraday: []
+    intraday: ["intraday_bollinger_rsi", "intraday_ema_cross"]
   high_volatility:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer"]
-    intraday: []
+    intraday: ["intraday_ema_cross"]
   low_volatility:
     long_term: ["true_dca"]
     swing: ["trend_following"]
-    intraday: []
+    intraday: ["intraday_bollinger_rsi", "intraday_ema_cross"]
   panic:
     long_term: ["true_dca"]
     swing: []
-    intraday: []
+    intraday: []    # no intraday in panic — too risky
   euphoric:
     long_term: ["true_dca"]
     swing: []
-    intraday: []
+    intraday: ["intraday_ema_cross"]
   compression:
     long_term: ["true_dca"]
     swing: []
-    intraday: []
+    intraday: ["intraday_bollinger_rsi", "intraday_session_breakout"]
   breakout_expansion:
     long_term: ["true_dca"]
     swing: ["breakout", "trend_following"]
-    intraday: []
+    intraday: ["intraday_session_breakout", "intraday_ema_cross"]

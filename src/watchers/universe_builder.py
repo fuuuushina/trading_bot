@@ -173,8 +173,11 @@ class MarketUniverseBuilder:
             for wa in _MACRO_INSTRUMENTS:
                 add(wa)
 
-        # 3. Forex core si préf forex ou ticker forex détecté
-        has_forex = any(self._ticker_class(t) == "forex" for t in primary_tickers)
+        # 3. Forex core si préf forex activée ou ticker forex dans les primaires
+        has_forex = (
+            getattr(profile.preferences, "forex", False)
+            or any(self._ticker_class(t) == "forex" for t in primary_tickers)
+        )
         if has_forex:
             for wa in _FOREX_CORE:
                 add(wa)
@@ -210,7 +213,15 @@ class MarketUniverseBuilder:
     # ------------------------------------------------------------------ #
 
     def _default_tickers(self, profile: ClientProfile) -> list[str]:
-        """Tickers par défaut selon objectif."""
+        """Tickers par défaut selon objectif et préférences."""
+        # Forex-only mode: return major FX pairs instead of equities
+        if (
+            getattr(profile.preferences, "forex", False)
+            and not profile.preferences.etf
+            and not profile.preferences.stocks
+        ):
+            return ["EURUSD=X"]
+
         if profile.objective == Objective.GROWTH:
             return ["SPY", "QQQ", "NVDA", "MSFT", "AAPL"]
         if profile.objective == Objective.INCOME:

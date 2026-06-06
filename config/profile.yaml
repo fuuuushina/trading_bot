@@ -30,7 +30,8 @@ client:
 
   # Préférences d'actifs
   preferences:
-    etf: true
-    stocks: true
-    intraday: false
+    etf: false      # désactivé pour test EUR/USD pur
+    stocks: false   # désactivé pour test EUR/USD pur
+    intraday: true  # active les stratégies intraday 5min
+    forex: true     # active EUR/USD via _FOREX_CORE
     crypto: false
