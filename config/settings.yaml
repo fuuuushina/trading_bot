@@ -76,7 +76,7 @@ broker:
 
 # ---- AI Layer ----
 ai:
-  enabled: true
+  enabled: false            # Mettre true si tu as une clé ANTHROPIC_API_KEY
   provider: "anthropic"
   api_key_env: "ANTHROPIC_API_KEY"
   strategic_model: "claude-opus-4-6"
@@ -109,18 +109,38 @@ alerts:
   # Minimum severity to notify: DEBUG | INFO | WARNING | CRITICAL
   min_severity: "WARNING"
 
+# ---- Market Watcher ----
+market_watcher:
+  mvp_mode: true                  # true = cycle unique 15 min pour tous les types
+  mvp_cycle_seconds: 900          # 15 min en MVP
+  intraday_interval_seconds: 300  # 5 min (actif si mvp_mode=false)
+  hourly_interval_seconds: 3600   # 1h
+  daily_interval_seconds: 86400   # 24h
+  llm_interval_seconds: 86400     # LLM Market Analyst 1x/jour max
+
+# ---- Market Analyst (LLM) ----
+market_analyst:
+  enabled: false            # true = appels LLM pour l'analyse marché
+  provider: "claude"        # claude | qwen
+  model: "claude-sonnet-4-6"
+  # Pour Qwen : model: "qwen-plus" ou "qwen-max"
+  # qwen_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  # API key: QWEN_API_KEY ou DASHSCOPE_API_KEY dans .env
+  temperature: 0.2
+  max_tokens: 800
+  timeout_seconds: 20
+
 # ---- Signal Aggregator ----
 signal_aggregator:
   min_confidence: 0.45        # Confidence minimale pour transmettre un signal agrégé
 
 # ---- News Layer ----
 news:
-  enabled: false              # Mettre true pour activer (nécessite au moins une API key)
+  enabled: true               # Finnhub activé
   refresh_minutes: 30         # Fréquence de collecte
   max_age_hours: 24           # Ancienneté max des articles
   sources:                    # Sources activées (par ordre de priorité)
     - "finnhub"
-    - "newsapi"
     - "rss"
   # API keys (optionnelles — récupérées depuis .env si non définies ici)
   finnhub_api_key: null       # ou env var FINNHUB_API_KEY

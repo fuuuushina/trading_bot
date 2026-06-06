@@ -133,16 +133,39 @@ class NewsCollector:
         try:
             import requests
             articles = []
-            targets = tickers or ["general"]
-            for ticker in targets[:5]:  # max 5 tickers par appel pour rester dans les limites
-                url = "https://finnhub.io/api/v1/company-news"
-                params = {
-                    "symbol": ticker,
-                    "from": time.strftime("%Y-%m-%d", time.gmtime(cutoff)),
-                    "to": time.strftime("%Y-%m-%d", time.gmtime()),
-                    "token": api_key,
-                }
-                resp = requests.get(url, params=params, timeout=10)
+            date_from = time.strftime("%Y-%m-%d", time.gmtime(cutoff))
+            date_to   = time.strftime("%Y-%m-%d", time.gmtime())
+
+            # 1. News générales de marché (toujours disponible, plan gratuit)
+            resp = requests.get(
+                "https://finnhub.io/api/v1/news",
+                params={"category": "general", "token": api_key},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                for item in resp.json():
+                    pub = float(item.get("datetime", 0))
+                    if pub < cutoff:
+                        continue
+                    # Détecter les tickers mentionnés dans le titre
+                    related = _detect_tickers(item.get("headline", ""), tickers or [])
+                    articles.append(RawArticle.from_headline(
+                        headline=item.get("headline", ""),
+                        summary=item.get("summary", ""),
+                        source="finnhub",
+                        url=item.get("url", ""),
+                        published_at=pub,
+                        assets=related,
+                        raw=item,
+                    ))
+
+            # 2. News par ticker (plan gratuit : données récentes limitées)
+            for ticker in (tickers or [])[:3]:
+                resp = requests.get(
+                    "https://finnhub.io/api/v1/company-news",
+                    params={"symbol": ticker, "from": date_from, "to": date_to, "token": api_key},
+                    timeout=10,
+                )
                 if resp.status_code == 200:
                     for item in resp.json():
                         articles.append(RawArticle.from_headline(
@@ -154,6 +177,8 @@ class NewsCollector:
                             assets=[ticker],
                             raw=item,
                         ))
+
+            logger.debug("Finnhub: %d articles fetched", len(articles))
             return articles
         except ImportError:
             logger.debug("requests not installed — cannot use Finnhub.")

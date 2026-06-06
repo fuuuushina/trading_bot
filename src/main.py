@@ -102,175 +102,115 @@ def run_backtest(ticker: str, strategy_name: str) -> None:
 
 
 def run_paper_loop() -> None:
-    """Main paper trading loop."""
-    import yfinance as yf  # type: ignore
-
+    """Main paper trading loop — piloté par le Market Watcher."""
     from src.ai.advisory import AIAdvisoryLayer
+    from src.ai.market_analyst import MarketAnalyst
     from src.ai.strategic_planner import StrategicPlanner
-    from src.data.yfinance_helpers import configure_yfinance_cache, normalize_yfinance_columns
+    from src.alerts.alert_manager import AlertLevel, AlertManager, AlertType
+    from src.data.yfinance_helpers import configure_yfinance_cache
     from src.engine.decision_engine import DecisionEngine
-    from src.execution.paper_broker import PaperBroker, OrderSide
-    from src.features.indicators import compute_all_features
+    from src.execution.paper_broker import PaperBroker
+    from src.features.feature_engine import FeatureEngine
+    from src.ml.regime_model import RegimeModel
+    from src.monitoring.logger import AuditLogger, DailyReporter
     from src.news.news_manager import NewsManager
     from src.portfolio.allocation_engine import AllocationEngine
     from src.profile.client_profile import ClientProfile
+    from src.watchers.market_watcher import MarketWatcher
+    from src.watchers.portfolio_watcher import PortfolioWatcher
+    from src.watchers.universe_builder import MarketUniverseBuilder
 
     settings = get_settings()
     risk_cfg = get_risk_config()
     strategy_cfg = get_strategy_config()
     profile_cfg = get_profile_config()
 
-    broker_cfg = settings.get("broker", {}).get("paper", {})
-    ai_cfg = settings.get("ai", {})
-    alerts_cfg = settings.get("alerts", {})
-    news_cfg = settings.get("news", {})
+    broker_cfg     = settings.get("broker", {}).get("paper", {})
+    ai_cfg         = settings.get("ai", {})
+    alerts_cfg     = settings.get("alerts", {})
+    news_cfg       = settings.get("news", {})
+    analyst_cfg    = settings.get("market_analyst", {})
+
+    log = logging.getLogger("main")
 
     # --- Profil client + plan stratégique ---
     profile = ClientProfile.from_dict(profile_cfg.get("client", {}))
     planner = StrategicPlanner(ai_cfg)
-    plan = planner.build_plan(profile)
-    allocation_engine = AllocationEngine(risk_cfg, strategy_plan=plan)
+    plan    = planner.build_plan(profile)
+    AllocationEngine(risk_cfg, strategy_plan=plan)
 
-    logger = logging.getLogger("main")
-    logger.info(
-        "Client profile: %s | target=%.0f%% | allocation=%s",
-        profile.risk_profile_label,
-        plan.target_annual_return * 100,
-        plan.allocation,
-    )
-    logger.info("Strategy reasoning: %s", plan.reasoning)
+    log.info("Profile: %s | target=%.0f%% | %s", profile.risk_profile_label,
+             plan.target_annual_return * 100, plan.allocation)
 
+    # --- Universe ---
+    universe = MarketUniverseBuilder().build(profile)
+    log.info("Universe: %s", universe.to_dict())
+
+    # --- Broker ---
     broker = PaperBroker(
         initial_capital=broker_cfg.get("initial_capital", 100_000.0),
-        commission_flat=broker_cfg.get("commission_per_trade", 1.0),
+        commission_flat=broker_cfg.get("commission_per_trade", 0.0),
         slippage_pct=broker_cfg.get("slippage_pct", 0.001),
     )
-    ai_layer = AIAdvisoryLayer(ai_cfg) if ai_cfg.get("enabled") else None
-    engine = DecisionEngine(risk_cfg, settings, strategy_cfg, ai_layer=ai_layer)
 
-    # --- News Manager ---
-    news_manager = NewsManager(news_cfg, universe=universe)
-    news_manager.start()
-    audit = AuditLogger()
-    alerts = AlertDispatcher(alerts_cfg)
-    reporter = DailyReporter()
-    # logger déjà défini plus haut (après import)
+    # --- Composants ---
+    ai_layer    = AIAdvisoryLayer(ai_cfg) if ai_cfg.get("enabled") else None
+    engine      = DecisionEngine(risk_cfg, settings, strategy_cfg, ai_layer=ai_layer)
 
-    universe = (
-        settings.get("universe", {}).get("swing", []) +
-        settings.get("universe", {}).get("long_term", [])
-    )[:10]  # Cap at 10 for now
+    alert_mgr   = AlertManager(alerts_cfg)
+    portfolio_w = PortfolioWatcher(risk_cfg, alert_mgr)
+    feature_eng = FeatureEngine()
+    regime_mdl  = RegimeModel()
+    analyst     = MarketAnalyst(analyst_cfg)
+
+    news_mgr    = NewsManager(news_cfg, universe=universe.primary_tickers)
+    news_mgr.start()
 
     configure_yfinance_cache()
-    logger.info("Paper trading loop started. Universe: %s", universe)
-    alerts.send("Bot started in PAPER MODE.", "INFO")
+    audit    = AuditLogger()
+    reporter = DailyReporter()
 
-    cycle = 0
-    decisions_today: list[dict] = []
-    last_regime = "unknown"
+    # --- Market Watcher (cœur) ---
+    watcher = MarketWatcher(
+        cfg=settings,
+        broker=broker,
+        decision_engine=engine,
+        alert_manager=alert_mgr,
+        portfolio_watcher=portfolio_w,
+        feature_engine=feature_eng,
+        regime_model=regime_mdl,
+        market_analyst=analyst,
+        news_manager=news_mgr,
+        client_profile=profile,
+        universe=universe,
+    )
+    watcher.start()
 
-    while True:
-        try:
-            cycle += 1
-            logger.info("--- Cycle %d ---", cycle)
+    alert_mgr.send(AlertLevel.INFO, AlertType.GENERAL, "Bot started in PAPER MODE.")
+    log.info("Market Watcher running. Press Ctrl+C to stop.")
 
-            # Download latest daily bars
-            data_map: dict = {}
-            for ticker in universe:
-                try:
-                    df_raw = yf.download(
-                        ticker, period="2y", interval="1d",
-                        auto_adjust=True, progress=False
-                    )
-                    if df_raw.empty or len(df_raw) < 50:
-                        continue
-                    df_raw = normalize_yfinance_columns(df_raw)
-                    data_map[ticker] = compute_all_features(df_raw)
-                except Exception as exc:
-                    logger.warning("Data download failed for %s: %s", ticker, exc)
+    try:
+        while True:
+            time.sleep(60)
+            # Rapport périodique
+            state = watcher.current_state
+            if state:
+                log.info(
+                    "Status: regime=%s risk=%s vix=%s cycles=%d",
+                    state.regime, state.risk_level,
+                    f"{state.vix:.1f}" if state.vix else "N/A",
+                    watcher.cycle_count,
+                )
+            # Rapport journalier
+            ps = broker.get_portfolio_state()
+            daily = reporter.generate(ps, broker.get_trade_history(), [], state.regime if state else "unknown")
+            audit.log_decision({"type": "heartbeat", "portfolio": ps, "regime": state.to_dict() if state else {}})
 
-            if not data_map:
-                logger.error("No data available. Sleeping 60s.")
-                time.sleep(60)
-                continue
-
-            portfolio_state = broker.get_portfolio_state()
-            open_positions = broker.get_open_positions()
-            trade_history = broker.get_trade_history()
-
-            # Injecter les scores news dans l'agrégateur avant le cycle
-            if news_manager.enabled:
-                engine.apply_news_risk(news_manager.get_risk_scores())
-
-            # Run decision cycle
-            decisions = engine.run_cycle(
-                data_map=data_map,
-                portfolio_state=portfolio_state,
-                open_positions=open_positions,
-                trade_history=trade_history,
-            )
-
-            # Process executable decisions
-            current_prices = {t: float(df["close"].iloc[-1]) for t, df in data_map.items()}
-            broker.fill_pending_orders(current_prices)
-            broker.check_stops_and_targets(current_prices)
-
-            for dec in decisions:
-                audit.log_decision(dec.to_dict())
-                decisions_today.append(dec.to_dict())
-
-                if dec.final_action == "EXECUTE":
-                    signal = dec.signal
-                    side = OrderSide.BUY if signal.signal.value == "BUY" else OrderSide.SELL
-                    shares = dec.risk_verdict.approved_shares
-                    if shares > 0:
-                        broker.submit_market_order(
-                            asset=signal.asset,
-                            side=side,
-                            quantity=shares,
-                            strategy_name=signal.strategy_name,
-                            horizon=signal.horizon.value,
-                            stop_loss=signal.stop_loss,
-                            take_profit=signal.take_profit,
-                        )
-                        broker.fill_pending_orders(current_prices)
-                        alerts.send(
-                            f"PAPER TRADE: {side.value} {signal.asset} "
-                            f"x{shares:.2f} @ {signal.entry_price:.2f} | "
-                            f"{signal.strategy_name} | conf={signal.confidence:.2f}",
-                            "INFO",
-                        )
-
-            # Update regime for reporting
-            if decisions:
-                last_regime = decisions[0].regime.regime.value
-
-            # Daily report at cycle end
-            daily_report = reporter.generate(
-                broker.get_portfolio_state(),
-                broker.get_trade_history(),
-                decisions_today,
-                last_regime,
-            )
-            logger.info("Daily report: PnL=%.2f drawdown=%.2f%%",
-                        daily_report["daily_pnl"],
-                        daily_report["drawdown_pct"] * 100)
-
-            # Sleep until next cycle (daily bar = 24h in production)
-            # In development, set to shorter interval
-            sleep_seconds = 3600  # 1 hour polling for demonstration
-            logger.info("Sleeping %ds until next cycle.", sleep_seconds)
-            time.sleep(sleep_seconds)
-
-        except KeyboardInterrupt:
-            logger.info("Bot stopped by user.")
-            alerts.send("Bot stopped by user (KeyboardInterrupt).", "WARNING")
-            news_manager.stop()
-            break
-        except Exception as exc:
-            logger.critical("Unhandled error in main loop: %s", exc, exc_info=True)
-            alerts.send(f"CRITICAL ERROR: {exc}", "CRITICAL")
-            time.sleep(30)
+    except KeyboardInterrupt:
+        log.info("Bot stopped by user.")
+        alert_mgr.send(AlertLevel.WARNING, AlertType.GENERAL, "Bot stopped by user.")
+        watcher.stop()
+        news_mgr.stop()
 
 
 def main() -> None:
