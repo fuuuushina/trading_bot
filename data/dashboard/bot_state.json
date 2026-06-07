@@ -1,7 +1,7 @@
 {
-  "last_update": "2026-06-06T18:49:13",
+  "last_update": "2026-06-06T19:04:15",
   "is_running": true,
-  "cycle_count": 1,
+  "cycle_count": 4,
   "mode": "paper",
   "market": {
     "regime": "unknown",
@@ -10,7 +10,7 @@
     "source": "rules",
     "risk_level": "medium",
     "risk_fr": "Modere",
-    "vix": 21.51,
+    "vix": null,
     "trend": "neutral",
     "exposure": 0.2,
     "analyst_summary": "March\u00e9 en r\u00e9gime de consolidation, exposition r\u00e9duite en attendant une clarification de la tendance.",
@@ -37,6 +37,18 @@
   "equity_history": [
     {
       "time": "2026-06-06T18:49:13.804759+00:00",
+      "equity": 10000.0
+    },
+    {
+      "time": "2026-06-06T18:54:14.205960+00:00",
+      "equity": 10000.0
+    },
+    {
+      "time": "2026-06-06T18:59:14.607990+00:00",
+      "equity": 10000.0
+    },
+    {
+      "time": "2026-06-06T19:04:15.061330+00:00",
       "equity": 10000.0
     }
   ],
