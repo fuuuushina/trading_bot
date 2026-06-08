@@ -8,7 +8,7 @@ client:
   name: "default"
 
   # Capital total disponible (USD)
-  capital: 10000.0
+  capital: 2000.0
 
   # Tolérance au risque : conservative | moderate | aggressive | speculative
   risk_tolerance: "moderate"

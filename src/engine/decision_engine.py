@@ -96,6 +96,7 @@ class DecisionEngine:
         self.signal_aggregator = SignalAggregator(
             min_confidence=settings_cfg.get("signal_aggregator", {}).get("min_confidence", 0.45)
         )
+        self.last_no_trade: list[dict] = []
 
         # Build strategy library
         scfg = strategy_cfg.get("strategies", {})
@@ -148,14 +149,19 @@ class DecisionEngine:
             return []
 
         decisions: list[DecisionRecord] = []
+        self.last_no_trade: list[dict] = []  # reset each cycle
 
         # Benchmark pour la détection de régime
         benchmark = "SPY"
         if benchmark in data_map:
             regime_result = self.regime_detector.detect(data_map[benchmark], vix_series)
-        else:
+        elif data_map:
             first_asset = next(iter(data_map))
             regime_result = self.regime_detector.detect(data_map[first_asset], vix_series)
+        else:
+            from src.features.regime_detector import MarketRegime, RegimeResult
+            regime_result = RegimeResult(regime=MarketRegime.RANGE, confidence=0.2,
+                                         explanation="No benchmark data — defaulting to range.")
 
         regime_str = regime_result.regime.value
         logger.info("Market regime: %s (confidence=%.2f)", regime_str, regime_result.confidence)
@@ -193,7 +199,7 @@ class DecisionEngine:
                         continue
 
                     if raw_signal.signal == SignalType.NO_TRADE:
-                        logger.debug("NO_TRADE: %s / %s", strategy_name, asset)
+                        logger.debug("NO_TRADE: %s / %s — %s", strategy_name, asset, raw_signal.reason)
                         continue
 
                     raw_signals.append(raw_signal)
@@ -223,7 +229,12 @@ class DecisionEngine:
                     continue
 
                 if raw_signal.signal == SignalType.NO_TRADE:
-                    logger.debug("NO_TRADE: %s / %s", strategy_name, asset)
+                    logger.info("NO_TRADE: %s / %s — %s", strategy_name, asset, raw_signal.reason)
+                    self.last_no_trade.append({
+                        "asset": asset,
+                        "strategy": strategy_name,
+                        "reason": raw_signal.reason or "",
+                    })
                     continue
 
                 raw_signals.append(raw_signal)
@@ -261,6 +272,16 @@ class DecisionEngine:
                     record.risk_verdict.approved_size_usd,
                     agg_signal.confidence,
                     agg_signal.metadata.get("n_agreeing", 1),
+                )
+            else:
+                blocking = "; ".join(r.reason for r in record.rules_verdict.blocking_rules) if record.rules_verdict.blocking_rules else record.risk_verdict.reason
+                logger.info(
+                    "DECISION → %s: %s %s (conf=%.2f) — %s",
+                    record.final_action,
+                    agg_signal.asset,
+                    agg_signal.signal.value,
+                    agg_signal.confidence,
+                    blocking,
                 )
 
         return decisions

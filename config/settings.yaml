@@ -57,12 +57,14 @@ market_hours:
   pre_market_buffer_minutes: 15
   post_market_buffer_minutes: 0
   intraday_cutoff_minutes_before_close: 30
+  forex_open: "07:00"     # London open UTC
+  forex_close: "21:00"    # NY close UTC
 
 # ---- Broker ----
 broker:
   paper:
     provider: "local"              # local PaperBroker — forex not supported by Alpaca
-    initial_capital: 10000.0       # EUR/USD trades in larger notional (1 lot = 100k)
+    initial_capital: 2000.0        # EUR/USD trades in larger notional (1 lot = 100k)
     execution_enabled: true
     min_position_usd: 100.0        # min order size
     max_position_usd: 2000.0       # max 20% of capital per trade

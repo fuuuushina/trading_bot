@@ -27,6 +27,7 @@ from src.strategies.base import (
 )
 
 _MIN_BARS = 35   # ~3h of 5min bars for EMA(21) to stabilize
+_CROSS_LOOKBACK = 5  # detect cross within last N bars (~25 min)
 
 
 class IntradayEMACrossStrategy(BaseStrategy):
@@ -59,7 +60,6 @@ class IntradayEMACrossStrategy(BaseStrategy):
         atr_val  = float(atr(df, 14).iloc[-1])
 
         curr_fast, curr_slow = float(fast.iloc[-1]), float(slow.iloc[-1])
-        prev_fast, prev_slow = float(fast.iloc[-2]), float(slow.iloc[-2])
         c = float(close.iloc[-1])
 
         if pd.isna(curr_fast) or pd.isna(curr_slow) or atr_val <= 0:
@@ -68,13 +68,25 @@ class IntradayEMACrossStrategy(BaseStrategy):
 
         rsi_val = float(rsi_vals.iloc[-1])
 
-        # Detect cross in last 2 bars
-        bullish_cross = (prev_fast <= prev_slow) and (curr_fast > curr_slow)
-        bearish_cross = (prev_fast >= prev_slow) and (curr_fast < curr_slow)
+        # Detect cross within last _CROSS_LOOKBACK bars
+        n_look = min(_CROSS_LOOKBACK, len(fast) - 1)
+        bullish_cross = False
+        bearish_cross = False
+        for i in range(1, n_look + 1):
+            f_cur = float(fast.iloc[-i])
+            f_prv = float(fast.iloc[-(i + 1)])
+            s_cur = float(slow.iloc[-i])
+            s_prv = float(slow.iloc[-(i + 1)])
+            if (f_prv <= s_prv) and (f_cur > s_cur):
+                bullish_cross = True
+                break
+            if (f_prv >= s_prv) and (f_cur < s_cur):
+                bearish_cross = True
+                break
 
         if not bullish_cross and not bearish_cross:
             return no_trade(self.name, asset, timeframe, self.horizon,
-                            "No EMA cross in last 2 bars")
+                            f"No EMA cross in last {n_look} bars")
 
         # RSI filter
         if bullish_cross and not (38 <= rsi_val <= 72):

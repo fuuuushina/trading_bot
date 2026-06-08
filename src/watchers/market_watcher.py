@@ -363,7 +363,7 @@ class MarketWatcher:
         if len(self._equity_history) > 2000:
             self._equity_history = self._equity_history[-2000:]
 
-        # Track recent decisions
+        # Track recent decisions (EXECUTE / BLOCK)
         for dec in decisions:
             self._recent_signals.append({
                 "time": state.computed_at[:19],
@@ -374,8 +374,21 @@ class MarketWatcher:
                 "action": dec.final_action,
                 "reason": (dec.signal.reason or "")[:120],
             })
-        if len(self._recent_signals) > 100:
-            self._recent_signals = self._recent_signals[-100:]
+
+        # Track NO_TRADE strategy activity so the Strategies tab is never empty
+        for nt in self.engine.last_no_trade:
+            self._recent_signals.append({
+                "time": state.computed_at[:19],
+                "asset": nt["asset"],
+                "strategy": nt["strategy"],
+                "signal": "NO_TRADE",
+                "confidence": 0.0,
+                "action": "NO_TRADE",
+                "reason": nt["reason"][:120],
+            })
+
+        if len(self._recent_signals) > 200:
+            self._recent_signals = self._recent_signals[-200:]
 
         self._write_dashboard_state(state, portfolio_state, intraday_map)
         return state

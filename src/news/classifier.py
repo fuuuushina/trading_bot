@@ -28,6 +28,15 @@ logger = logging.getLogger(__name__)
 # Topics financiers reconnus
 # ------------------------------------------------------------------ #
 
+# Mapping yfinance forex tickers → keywords to find in article text
+FOREX_TICKER_KEYWORDS: dict[str, list[str]] = {
+    "EURUSD=X": ["eur/usd", "eurusd", "euro", "eur usd", "euro dollar", "ecb", "european central bank"],
+    "GBPUSD=X": ["gbp/usd", "gbpusd", "pound", "sterling", "bank of england"],
+    "USDJPY=X": ["usd/jpy", "usdjpy", "yen", "boj", "bank of japan"],
+    "USDCHF=X": ["usd/chf", "usdchf", "franc", "snb"],
+    "DX-Y.NYB": ["dollar index", "dxy", "us dollar", "usd index"],
+}
+
 TOPIC_KEYWORDS: dict[str, list[str]] = {
     "earnings":        ["earnings", "eps", "revenue", "profit", "loss", "beat", "miss", "guidance"],
     "fed_policy":      ["fed", "federal reserve", "interest rate", "fomc", "powell", "rate hike", "rate cut"],
@@ -134,7 +143,14 @@ class NewsClassifier:
             # Si aucun ticker connu, essayer de détecter via le texte
             if not assigned:
                 text = article.headline + " " + article.summary
+                text_lower = text.lower()
+                # Standard ticker match (e.g. "AAPL", "SPY")
                 assigned = {t for t in universe if t.upper() in text.upper()}
+                # Forex tickers need keyword matching (articles never contain "EURUSD=X")
+                for t in universe:
+                    if t not in assigned and t in FOREX_TICKER_KEYWORDS:
+                        if any(kw in text_lower for kw in FOREX_TICKER_KEYWORDS[t]):
+                            assigned.add(t)
             for ticker in assigned:
                 asset_articles[ticker].append(article)
 

@@ -66,6 +66,14 @@ class StatisticalRules:
         if "volume" not in df.columns:
             return RuleResult(name, True, "Volume column absent — skipped.", "warn")
 
+        # Forex assets (yfinance ticker ends with =X) report tick volume,
+        # not contract volume — skip absolute threshold, use ratio check only.
+        if signal.asset.endswith("=X"):
+            avg_vol = float(df["volume"].rolling(20).mean().iloc[-1])
+            if avg_vol == 0:
+                return RuleResult(name, True, "Forex: zero volume (normal for some feeds).", "warn")
+            return RuleResult(name, True, f"Forex tick volume {avg_vol:,.0f} — threshold skipped.")
+
         min_vol = (
             self.risk.get("intraday", {}).get("min_volume_intraday", 1_000_000)
             if signal.horizon == Horizon.INTRADAY
@@ -188,9 +196,15 @@ class StrategicRules:
 
         now_utc = datetime.utcnow().time()
         mh = self.settings.get("market_hours", {})
-        open_str = mh.get("us_open", "13:30")
-        close_str = mh.get("us_close", "20:00")
         buffer = mh.get("intraday_cutoff_minutes_before_close", 30)
+
+        is_forex = signal.asset.endswith("=X")
+        if is_forex:
+            open_str = mh.get("forex_open", "07:00")
+            close_str = mh.get("forex_close", "21:00")
+        else:
+            open_str = mh.get("us_open", "13:30")
+            close_str = mh.get("us_close", "20:00")
 
         open_t = time(*map(int, open_str.split(":")))
         close_t = time(*map(int, close_str.split(":")))
@@ -251,7 +265,7 @@ class StrategicRules:
 
     def check_minimum_confidence(self, signal: Signal) -> RuleResult:
         name = "minimum_confidence"
-        min_conf = 0.55
+        min_conf = 0.50
         passed = signal.confidence >= min_conf
         return RuleResult(
             name, passed,

@@ -222,15 +222,15 @@ class MarketRegimeDetector:
         total_score = sum(votes.values()) + 1e-10
         confidence = min(best_score / total_score * 2, 1.0)  # normalise
 
-        # Safety: low confidence → UNKNOWN
-        if best_score < 2:
+        # Safety: zero votes → RANGE as neutral fallback
+        if best_score == 0:
             return RegimeResult(
-                regime=MarketRegime.UNKNOWN,
-                confidence=0.1,
+                regime=MarketRegime.RANGE,
+                confidence=0.2,
                 score=score,
                 market_label=label,
                 sub_signals=signals,
-                explanation="No clear regime signal.",
+                explanation="No clear regime signal — defaulting to range.",
             )
 
         explanation = self._build_explanation(best_regime, signals)

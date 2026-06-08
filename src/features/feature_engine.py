@@ -260,14 +260,14 @@ class FeatureEngine:
         bb_width_val = 0.0
         if n >= 20:
             bb = bollinger_bands(close, min(20, n))
-            if "upper" in bb.columns and "lower" in bb.columns:
-                width = bb["upper"].iloc[-1] - bb["lower"].iloc[-1]
+            if "bb_upper" in bb.columns and "bb_lower" in bb.columns:
+                width = bb["bb_upper"].iloc[-1] - bb["bb_lower"].iloc[-1]
                 bb_width_val = width / last if last > 0 else 0.0
 
         # --- Volume ---
         vol_ratio_val = 1.0
         if "volume" in df.columns and n >= 20:
-            vr = volume_ratio(df["volume"], min(20, n))
+            vr = volume_ratio(df, min(20, n))
             if not vr.dropna().empty:
                 vol_ratio_val = float(vr.iloc[-1])
 
