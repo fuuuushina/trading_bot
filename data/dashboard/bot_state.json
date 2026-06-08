@@ -1,5 +1,5 @@
 {
-  "last_update": "2026-06-08T07:26:46",
+  "last_update": "2026-06-08T09:45:20",
   "is_running": true,
   "cycle_count": 1,
   "mode": "paper",
@@ -10,50 +10,360 @@
     "source": "rules",
     "risk_level": "medium",
     "risk_fr": "Modere",
-    "vix": 21.51,
+    "vix": 19.91,
     "trend": "positive",
-    "exposure": 0.3,
-    "analyst_summary": "March\u00e9 en r\u00e9gime de range, exposition limit\u00e9e recommand\u00e9e",
+    "exposure": 0.6,
+    "analyst_summary": "March\u00e9 en r\u00e9gime de consolidation, exposition r\u00e9duite en raison de la volatilit\u00e9 \u00e9lev\u00e9e.",
     "key_risks": [
-      "Volatilit\u00e9 \u00e9lev\u00e9e",
-      "Correction du march\u00e9"
+      "Volatilit\u00e9 des march\u00e9s",
+      "Incertitude \u00e9conomique"
     ],
     "opportunities": [
-      "Achats s\u00e9lectifs sur les assets sous-\u00e9valu\u00e9s"
+      "Reprise des valeurs technologiques",
+      "Stabilit\u00e9 des march\u00e9s de taux"
     ]
   },
   "portfolio": {
     "initial_capital": 2000.0,
-    "total_equity": 2000.0,
-    "cash": 2000.0,
-    "open_pnl": 0,
-    "realized_pnl": 0,
-    "total_pnl": 0,
-    "return_pct": 0.0,
-    "drawdown_pct": 0.0,
-    "num_positions": 0,
-    "exposure_pct": 0.0
+    "total_equity": 1997.68,
+    "cash": 1901.58,
+    "available_cash": 0.0,
+    "restricted_short_proceeds": 5892.06,
+    "total_exposure": 11880.22,
+    "open_pnl": -2.38,
+    "realized_pnl": 0.06,
+    "total_pnl": -2.32,
+    "return_pct": -0.116,
+    "drawdown_pct": -0.0012,
+    "num_positions": 20,
+    "exposure_pct": 5.947
   },
   "equity_history": [
     {
-      "time": "2026-06-08T07:26:46.410693+00:00",
-      "equity": 2000.0
+      "time": "2026-06-08T09:45:20.126877+00:00",
+      "equity": 1997.68
     }
   ],
-  "positions": [],
-  "recent_trades": [],
-  "recent_signals": [
+  "positions": [
     {
-      "time": "2026-06-08T07:26:46",
-      "asset": "EURUSD=X",
-      "strategy": "intraday_ema_cross",
-      "signal": "NO_TRADE",
-      "confidence": 0.0,
-      "action": "NO_TRADE",
-      "reason": "No EMA cross in last 5 bars"
+      "asset": "SPY",
+      "side": "long",
+      "quantity": 0.8135,
+      "avg_entry": 737.6974977905273,
+      "current_price": 737.5499877929688,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 726.8314,
+      "take_profit": 755.4143,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.363975"
     },
     {
-      "time": "2026-06-08T07:26:46",
+      "asset": "QQQ",
+      "side": "long",
+      "quantity": 0.851,
+      "avg_entry": 705.2010095581054,
+      "current_price": 705.0599975585938,
+      "market_value": 600.01,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 687.4339,
+      "take_profit": 734.4368,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.364997"
+    },
+    {
+      "asset": "IWM",
+      "side": "long",
+      "quantity": 2.1303,
+      "avg_entry": 281.70632389526367,
+      "current_price": 281.6499938964844,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 273.5832,
+      "take_profit": 295.0946,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.366023"
+    },
+    {
+      "asset": "GLD",
+      "side": "short",
+      "quantity": 1.5142,
+      "avg_entry": 396.16074223632813,
+      "current_price": 396.239990234375,
+      "market_value": 599.99,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 409.7233,
+      "take_profit": 373.7678,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.366023"
+    },
+    {
+      "asset": "TLT",
+      "side": "long",
+      "quantity": 7.0538,
+      "avg_entry": 85.07700955810547,
+      "current_price": 85.05999755859375,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 84.1485,
+      "take_profit": 86.5791,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.367078"
+    },
+    {
+      "asset": "MSFT",
+      "side": "short",
+      "quantity": 1.44,
+      "avg_entry": 416.5866794250488,
+      "current_price": 416.6700134277344,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 440.6539,
+      "take_profit": 379.3618,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.369084"
+    },
+    {
+      "asset": "NVDA",
+      "side": "long",
+      "quantity": 2.9254,
+      "avg_entry": 205.1410261047363,
+      "current_price": 205.10000610351562,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 192.1766,
+      "take_profit": 226.639,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.369084"
+    },
+    {
+      "asset": "AMZN",
+      "side": "short",
+      "quantity": 2.4387,
+      "avg_entry": 245.98079277954102,
+      "current_price": 246.02999877929688,
+      "market_value": 599.99,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 259.278,
+      "take_profit": 223.95,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.370076"
+    },
+    {
+      "asset": "GOOGL",
+      "side": "short",
+      "quantity": 1.6281,
+      "avg_entry": 368.456292779541,
+      "current_price": 368.5299987792969,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 386.7589,
+      "take_profit": 338.1486,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.370076"
+    },
+    {
+      "asset": "META",
+      "side": "short",
+      "quantity": 1.0118,
+      "avg_entry": 592.8814,
+      "current_price": 593.0,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 626.8876,
+      "take_profit": 536.5207,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.371085"
+    },
+    {
+      "asset": "JPM",
+      "side": "long",
+      "quantity": 1.9208,
+      "avg_entry": 312.43246911621094,
+      "current_price": 312.3699951171875,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 301.1239,
+      "take_profit": 331.1136,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.372589"
+    },
+    {
+      "asset": "XLE",
+      "side": "long",
+      "quantity": 10.404,
+      "avg_entry": 57.6815321685791,
+      "current_price": 57.66999816894531,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 55.6407,
+      "take_profit": 61.0521,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.372589"
+    },
+    {
+      "asset": "AMD",
+      "side": "long",
+      "quantity": 1.2605,
+      "avg_entry": 466.4732808837891,
+      "current_price": 466.3800048828125,
+      "market_value": 587.87,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 418.7807,
+      "take_profit": 577.445,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.373595"
+    },
+    {
+      "asset": "TSLA",
+      "side": "short",
+      "quantity": 1.5345,
+      "avg_entry": 390.9218,
+      "current_price": 391.0,
+      "market_value": 599.99,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 418.1492,
+      "take_profit": 348.768,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.374595"
+    },
+    {
+      "asset": "NFLX",
+      "side": "short",
+      "quantity": 7.301,
+      "avg_entry": 82.16356430511475,
+      "current_price": 82.18000030517578,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 85.9857,
+      "take_profit": 75.8371,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.374595"
+    },
+    {
+      "asset": "CRM",
+      "side": "long",
+      "quantity": 3.2317,
+      "avg_entry": 185.6971356628418,
+      "current_price": 185.66000366210938,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 170.1146,
+      "take_profit": 211.5689,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.375597"
+    },
+    {
+      "asset": "BABA",
+      "side": "short",
+      "quantity": 4.9562,
+      "avg_entry": 121.03578555908203,
+      "current_price": 121.05999755859375,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 128.0041,
+      "take_profit": 109.4864,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.375597"
+    },
+    {
+      "asset": "COIN",
+      "side": "short",
+      "quantity": 3.2289,
+      "avg_entry": 152.36951389770508,
+      "current_price": 152.39999389648438,
+      "market_value": 492.08,
+      "unrealized_pnl": -0.1,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 170.9824,
+      "take_profit": 121.4293,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.375597"
+    },
+    {
+      "asset": "PLTR",
+      "side": "short",
+      "quantity": 4.4271,
+      "avg_entry": 135.502892779541,
+      "current_price": 135.52999877929688,
+      "market_value": 600.0,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 148.6516,
+      "take_profit": 115.1186,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.376649"
+    },
+    {
+      "asset": "^GSPC",
+      "side": "long",
+      "quantity": 0.0813,
+      "avg_entry": 7385.2169824218745,
+      "current_price": 7383.740234375,
+      "market_value": 600.3,
+      "unrealized_pnl": -0.12,
+      "unrealized_pnl_pct": -0.0002,
+      "stop_loss": 7275.3761,
+      "take_profit": 7564.3472,
+      "strategy": "aggregated",
+      "horizon": "swing",
+      "opened_at": "2026-06-08T09:08:13.377602"
+    }
+  ],
+  "recent_trades": [
+    {
+      "asset": "EURUSD=X",
+      "strategy": "aggregated",
+      "horizon": "intraday",
+      "side": "short",
+      "quantity": 173.72,
+      "entry_price": 1.151047644162178,
+      "exit_price": 1.1507133472681046,
+      "pnl": 0.0581,
+      "pnl_pct": 0.0003,
+      "commission": 0.0,
+      "closed_at": "2026-06-08T09:30:46.440769"
+    }
+  ],
+  "recent_signals": [
+    {
+      "time": "2026-06-08T09:45:20",
       "asset": "EURUSD=X",
       "strategy": "intraday_bollinger_rsi",
       "signal": "NO_TRADE",
@@ -62,335 +372,299 @@
       "reason": "No BB+RSI condition met"
     },
     {
-      "time": "2026-06-08T07:26:46",
-      "asset": "SPY",
-      "strategy": "aggregated",
-      "signal": "BUY",
-      "confidence": 0.75,
-      "action": "BLOCK",
-      "reason": "[1 bots en accord: rsi_dip_buyer] | RSI(2)=8.1 [dip] while price > SMA200=682. Regime=range."
+      "time": "2026-06-08T09:45:20",
+      "asset": "MSFT",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Theme score -0.20 below \u00b10.25"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "MSFT",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=428.58 EMA21=423.85"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "AMZN",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "EMA20 above EMA50 \u2014 downtrend not confirmed"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "AAPL",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Theme score -0.20 below \u00b10.25"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "AAPL",
+      "strategy": "momentum_burst",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Pas de momentum: ret5=-1.5% prix=>EMA20 RSI=61"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "AAPL",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=308.85 EMA21=301.99"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "NFLX",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "BABA",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "MSTR",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "^GSPC",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "^GSPC",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=7515.33 EMA21=7445.35"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "DX-Y.NYB",
+      "strategy": "rsi_dip_buyer",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "RSI(2)=93.9 not oversold (threshold=50.0)."
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "DX-Y.NYB",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "IWM",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "IWM",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=287.38 EMA21=284.55"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "TSLA",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Theme score +0.20 below \u00b10.25"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "TSLA",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=417.89 EMA21=417.04"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "PLTR",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Theme score -0.20 below \u00b10.25"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "PLTR",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=142.93 EMA21=141.63"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "GLD",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "TLT",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "TLT",
+      "strategy": "momentum_burst",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Pas de momentum: ret5=-0.4% prix=>EMA20 RSI=50"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "TLT",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=85.14 EMA21=84.99"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "QQQ",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Asset not in any tracked sector"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "QQQ",
+      "strategy": "ema_cross_swing",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "No EMA cross signal. EMA9=729.26 EMA21=716.25"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "GOOGL",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Theme score -0.20 below \u00b10.25"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "JPM",
+      "strategy": "rsi_dip_buyer",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "RSI(2)=96.0 not oversold (threshold=50.0)."
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "JPM",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Price 312.37 above EMA20 303.61"
+    },
+    {
+      "time": "2026-06-08T09:45:20",
+      "asset": "META",
+      "strategy": "thematic_momentum",
+      "signal": "NO_TRADE",
+      "confidence": 0.0,
+      "action": "NO_TRADE",
+      "reason": "Theme score -0.20 below \u00b10.25"
     }
   ],
-  "news": [],
+  "news": [
+    {
+      "asset": "SPY",
+      "sentiment": 0.026,
+      "risk_score": 0.391,
+      "topics": [
+        "ai_tech",
+        "analyst",
+        "chip_export",
+        "dividend",
+        "earnings",
+        "fed_policy",
+        "geopolitical",
+        "macro",
+        "regulatory"
+      ],
+      "impact": "neutral",
+      "headline_count": 26,
+      "source": "keyword"
+    }
+  ],
   "eurusd": {
-    "price": 1.153,
-    "change_pct": 0.0115,
-    "ema_9": 1.15265,
-    "ema_21": 1.15265,
-    "rsi_14": 54.51,
-    "atr_14": 0.00037,
-    "bb_upper": 1.15309,
-    "bb_middle": 1.15243,
-    "bb_lower": 1.15176,
+    "price": 1.15088,
+    "change_pct": 0.0,
+    "ema_9": 1.15095,
+    "ema_21": 1.15133,
+    "rsi_14": 38.95,
+    "atr_14": 0.000322,
+    "bb_upper": 1.15248,
+    "bb_middle": 1.15137,
+    "bb_lower": 1.15026,
     "ohlcv": [
-      {
-        "t": "2026-06-08 01:50:00+01:00",
-        "o": 1.1534,
-        "h": 1.15354,
-        "l": 1.15327,
-        "c": 1.15354,
-        "e9": 1.15302,
-        "e21": 1.15277,
-        "bbu": 1.15338,
-        "bbl": 1.15187
-      },
-      {
-        "t": "2026-06-08 01:55:00+01:00",
-        "o": 1.1534,
-        "h": 1.15354,
-        "l": 1.1534,
-        "c": 1.15354,
-        "e9": 1.15313,
-        "e21": 1.15284,
-        "bbu": 1.15352,
-        "bbl": 1.15186
-      },
-      {
-        "t": "2026-06-08 02:00:00+01:00",
-        "o": 1.15367,
-        "h": 1.1538,
-        "l": 1.15367,
-        "c": 1.15367,
-        "e9": 1.15324,
-        "e21": 1.15292,
-        "bbu": 1.15366,
-        "bbl": 1.15186
-      },
-      {
-        "t": "2026-06-08 02:05:00+01:00",
-        "o": 1.1538,
-        "h": 1.1538,
-        "l": 1.15367,
-        "c": 1.1538,
-        "e9": 1.15335,
-        "e21": 1.153,
-        "bbu": 1.15381,
-        "bbl": 1.15188
-      },
-      {
-        "t": "2026-06-08 02:10:00+01:00",
-        "o": 1.15367,
-        "h": 1.15367,
-        "l": 1.15354,
-        "c": 1.15354,
-        "e9": 1.15339,
-        "e21": 1.15304,
-        "bbu": 1.15389,
-        "bbl": 1.15192
-      },
-      {
-        "t": "2026-06-08 02:15:00+01:00",
-        "o": 1.1534,
-        "h": 1.1534,
-        "l": 1.15314,
-        "c": 1.15314,
-        "e9": 1.15334,
-        "e21": 1.15305,
-        "bbu": 1.15388,
-        "bbl": 1.15202
-      },
-      {
-        "t": "2026-06-08 02:20:00+01:00",
-        "o": 1.15314,
-        "h": 1.15314,
-        "l": 1.153,
-        "c": 1.153,
-        "e9": 1.15327,
-        "e21": 1.15305,
-        "bbu": 1.15387,
-        "bbl": 1.15209
-      },
-      {
-        "t": "2026-06-08 02:25:00+01:00",
-        "o": 1.15287,
-        "h": 1.15287,
-        "l": 1.15221,
-        "c": 1.15221,
-        "e9": 1.15306,
-        "e21": 1.15297,
-        "bbu": 1.15389,
-        "bbl": 1.15207
-      },
-      {
-        "t": "2026-06-08 02:30:00+01:00",
-        "o": 1.15221,
-        "h": 1.15234,
-        "l": 1.15154,
-        "c": 1.15207,
-        "e9": 1.15286,
-        "e21": 1.15289,
-        "bbu": 1.15393,
-        "bbl": 1.15199
-      },
-      {
-        "t": "2026-06-08 02:35:00+01:00",
-        "o": 1.15234,
-        "h": 1.15247,
-        "l": 1.15234,
-        "c": 1.15234,
-        "e9": 1.15276,
-        "e21": 1.15284,
-        "bbu": 1.15394,
-        "bbl": 1.15195
-      },
-      {
-        "t": "2026-06-08 02:40:00+01:00",
-        "o": 1.15234,
-        "h": 1.15274,
-        "l": 1.15234,
-        "c": 1.15274,
-        "e9": 1.15275,
-        "e21": 1.15283,
-        "bbu": 1.15394,
-        "bbl": 1.15196
-      },
-      {
-        "t": "2026-06-08 02:45:00+01:00",
-        "o": 1.15274,
-        "h": 1.153,
-        "l": 1.15274,
-        "c": 1.15274,
-        "e9": 1.15275,
-        "e21": 1.15282,
-        "bbu": 1.15394,
-        "bbl": 1.15196
-      },
-      {
-        "t": "2026-06-08 02:50:00+01:00",
-        "o": 1.1526,
-        "h": 1.15274,
-        "l": 1.1526,
-        "c": 1.1526,
-        "e9": 1.15272,
-        "e21": 1.1528,
-        "bbu": 1.15394,
-        "bbl": 1.15196
-      },
-      {
-        "t": "2026-06-08 02:55:00+01:00",
-        "o": 1.1526,
-        "h": 1.15287,
-        "l": 1.1526,
-        "c": 1.15287,
-        "e9": 1.15275,
-        "e21": 1.15281,
-        "bbu": 1.15394,
-        "bbl": 1.15201
-      },
-      {
-        "t": "2026-06-08 03:00:00+01:00",
-        "o": 1.153,
-        "h": 1.153,
-        "l": 1.15287,
-        "c": 1.15287,
-        "e9": 1.15277,
-        "e21": 1.15281,
-        "bbu": 1.15394,
-        "bbl": 1.15202
-      },
-      {
-        "t": "2026-06-08 03:05:00+01:00",
-        "o": 1.15274,
-        "h": 1.15274,
-        "l": 1.1526,
-        "c": 1.1526,
-        "e9": 1.15274,
-        "e21": 1.1528,
-        "bbu": 1.15394,
-        "bbl": 1.15202
-      },
-      {
-        "t": "2026-06-08 03:10:00+01:00",
-        "o": 1.15247,
-        "h": 1.1526,
-        "l": 1.15247,
-        "c": 1.1526,
-        "e9": 1.15271,
-        "e21": 1.15278,
-        "bbu": 1.15394,
-        "bbl": 1.152
-      },
-      {
-        "t": "2026-06-08 03:15:00+01:00",
-        "o": 1.15274,
-        "h": 1.15287,
-        "l": 1.15274,
-        "c": 1.15274,
-        "e9": 1.15272,
-        "e21": 1.15277,
-        "bbu": 1.15393,
-        "bbl": 1.15198
-      },
-      {
-        "t": "2026-06-08 03:20:00+01:00",
-        "o": 1.15274,
-        "h": 1.153,
-        "l": 1.15274,
-        "c": 1.153,
-        "e9": 1.15278,
-        "e21": 1.1528,
-        "bbu": 1.15392,
-        "bbl": 1.15198
-      },
-      {
-        "t": "2026-06-08 03:25:00+01:00",
-        "o": 1.15314,
-        "h": 1.15327,
-        "l": 1.15314,
-        "c": 1.15314,
-        "e9": 1.15285,
-        "e21": 1.15283,
-        "bbu": 1.15389,
-        "bbl": 1.15198
-      },
-      {
-        "t": "2026-06-08 03:30:00+01:00",
-        "o": 1.15327,
-        "h": 1.15327,
-        "l": 1.15287,
-        "c": 1.15314,
-        "e9": 1.15291,
-        "e21": 1.15285,
-        "bbu": 1.15384,
-        "bbl": 1.152
-      },
-      {
-        "t": "2026-06-08 03:35:00+01:00",
-        "o": 1.15314,
-        "h": 1.15327,
-        "l": 1.15314,
-        "c": 1.15314,
-        "e9": 1.15295,
-        "e21": 1.15288,
-        "bbu": 1.15378,
-        "bbl": 1.15202
-      },
-      {
-        "t": "2026-06-08 03:40:00+01:00",
-        "o": 1.15314,
-        "h": 1.15327,
-        "l": 1.15314,
-        "c": 1.15327,
-        "e9": 1.15302,
-        "e21": 1.15292,
-        "bbu": 1.1537,
-        "bbl": 1.15205
-      },
-      {
-        "t": "2026-06-08 03:45:00+01:00",
-        "o": 1.15314,
-        "h": 1.15327,
-        "l": 1.15314,
-        "c": 1.15327,
-        "e9": 1.15307,
-        "e21": 1.15295,
-        "bbu": 1.15358,
-        "bbl": 1.15212
-      },
-      {
-        "t": "2026-06-08 03:50:00+01:00",
-        "o": 1.15327,
-        "h": 1.15327,
-        "l": 1.15314,
-        "c": 1.15327,
-        "e9": 1.15311,
-        "e21": 1.15298,
-        "bbu": 1.15353,
-        "bbl": 1.15215
-      },
-      {
-        "t": "2026-06-08 03:55:00+01:00",
-        "o": 1.1534,
-        "h": 1.1534,
-        "l": 1.15327,
-        "c": 1.15327,
-        "e9": 1.15314,
-        "e21": 1.153,
-        "bbu": 1.15355,
-        "bbl": 1.15214
-      },
-      {
-        "t": "2026-06-08 04:00:00+01:00",
-        "o": 1.15327,
-        "h": 1.15327,
-        "l": 1.153,
-        "c": 1.153,
-        "e9": 1.15311,
-        "e21": 1.153,
-        "bbu": 1.15355,
-        "bbl": 1.15214
-      },
-      {
-        "t": "2026-06-08 04:05:00+01:00",
-        "o": 1.153,
-        "h": 1.15314,
-        "l": 1.153,
-        "c": 1.15314,
-        "e9": 1.15312,
-        "e21": 1.15302,
-        "bbu": 1.15354,
-        "bbl": 1.15224
-      },
       {
         "t": "2026-06-08 04:10:00+01:00",
         "o": 1.15314,
@@ -956,18 +1230,326 @@
         "t": "2026-06-08 08:25:00+01:00",
         "o": 1.153,
         "h": 1.153,
-        "l": 1.153,
-        "c": 1.153,
-        "e9": 1.15265,
-        "e21": 1.15265,
+        "l": 1.15274,
+        "c": 1.15287,
+        "e9": 1.15263,
+        "e21": 1.15264,
+        "bbu": 1.15307,
+        "bbl": 1.15177
+      },
+      {
+        "t": "2026-06-08 08:30:00+01:00",
+        "o": 1.1526,
+        "h": 1.15287,
+        "l": 1.1526,
+        "c": 1.15287,
+        "e9": 1.15267,
+        "e21": 1.15266,
         "bbu": 1.15309,
         "bbl": 1.15176
+      },
+      {
+        "t": "2026-06-08 08:35:00+01:00",
+        "o": 1.15287,
+        "h": 1.15287,
+        "l": 1.15234,
+        "c": 1.15234,
+        "e9": 1.15261,
+        "e21": 1.15263,
+        "bbu": 1.15309,
+        "bbl": 1.15178
+      },
+      {
+        "t": "2026-06-08 08:40:00+01:00",
+        "o": 1.1526,
+        "h": 1.15274,
+        "l": 1.1526,
+        "c": 1.15274,
+        "e9": 1.15263,
+        "e21": 1.15264,
+        "bbu": 1.15311,
+        "bbl": 1.15182
+      },
+      {
+        "t": "2026-06-08 08:45:00+01:00",
+        "o": 1.15287,
+        "h": 1.15287,
+        "l": 1.15274,
+        "c": 1.15274,
+        "e9": 1.15265,
+        "e21": 1.15265,
+        "bbu": 1.15314,
+        "bbl": 1.15182
+      },
+      {
+        "t": "2026-06-08 08:50:00+01:00",
+        "o": 1.15274,
+        "h": 1.15274,
+        "l": 1.15234,
+        "c": 1.15247,
+        "e9": 1.15262,
+        "e21": 1.15264,
+        "bbu": 1.15314,
+        "bbl": 1.15185
+      },
+      {
+        "t": "2026-06-08 08:55:00+01:00",
+        "o": 1.1526,
+        "h": 1.1526,
+        "l": 1.15207,
+        "c": 1.15207,
+        "e9": 1.15251,
+        "e21": 1.15258,
+        "bbu": 1.15315,
+        "bbl": 1.15181
+      },
+      {
+        "t": "2026-06-08 09:00:00+01:00",
+        "o": 1.15194,
+        "h": 1.15221,
+        "l": 1.15181,
+        "c": 1.15221,
+        "e9": 1.15245,
+        "e21": 1.15255,
+        "bbu": 1.15314,
+        "bbl": 1.15178
+      },
+      {
+        "t": "2026-06-08 09:05:00+01:00",
+        "o": 1.15221,
+        "h": 1.15247,
+        "l": 1.15221,
+        "c": 1.15247,
+        "e9": 1.15245,
+        "e21": 1.15254,
+        "bbu": 1.15311,
+        "bbl": 1.15178
+      },
+      {
+        "t": "2026-06-08 09:10:00+01:00",
+        "o": 1.15247,
+        "h": 1.15247,
+        "l": 1.15221,
+        "c": 1.15221,
+        "e9": 1.1524,
+        "e21": 1.15251,
+        "bbu": 1.15311,
+        "bbl": 1.15177
+      },
+      {
+        "t": "2026-06-08 09:15:00+01:00",
+        "o": 1.15221,
+        "h": 1.15221,
+        "l": 1.15194,
+        "c": 1.15207,
+        "e9": 1.15234,
+        "e21": 1.15247,
+        "bbu": 1.1531,
+        "bbl": 1.15179
+      },
+      {
+        "t": "2026-06-08 09:20:00+01:00",
+        "o": 1.15207,
+        "h": 1.15207,
+        "l": 1.15181,
+        "c": 1.15194,
+        "e9": 1.15226,
+        "e21": 1.15242,
+        "bbu": 1.15311,
+        "bbl": 1.15174
+      },
+      {
+        "t": "2026-06-08 09:25:00+01:00",
+        "o": 1.15181,
+        "h": 1.15221,
+        "l": 1.15181,
+        "c": 1.15207,
+        "e9": 1.15222,
+        "e21": 1.15239,
+        "bbu": 1.15312,
+        "bbl": 1.15172
+      },
+      {
+        "t": "2026-06-08 09:30:00+01:00",
+        "o": 1.15221,
+        "h": 1.15234,
+        "l": 1.15207,
+        "c": 1.15207,
+        "e9": 1.15219,
+        "e21": 1.15236,
+        "bbu": 1.15312,
+        "bbl": 1.15169
+      },
+      {
+        "t": "2026-06-08 09:35:00+01:00",
+        "o": 1.15194,
+        "h": 1.15221,
+        "l": 1.15194,
+        "c": 1.15207,
+        "e9": 1.15217,
+        "e21": 1.15234,
+        "bbu": 1.15311,
+        "bbl": 1.15171
+      },
+      {
+        "t": "2026-06-08 09:40:00+01:00",
+        "o": 1.15194,
+        "h": 1.15194,
+        "l": 1.15154,
+        "c": 1.15168,
+        "e9": 1.15207,
+        "e21": 1.15228,
+        "bbu": 1.15315,
+        "bbl": 1.15162
+      },
+      {
+        "t": "2026-06-08 09:45:00+01:00",
+        "o": 1.15194,
+        "h": 1.15194,
+        "l": 1.15168,
+        "c": 1.15168,
+        "e9": 1.15199,
+        "e21": 1.15222,
+        "bbu": 1.15318,
+        "bbl": 1.15155
+      },
+      {
+        "t": "2026-06-08 09:50:00+01:00",
+        "o": 1.15168,
+        "h": 1.15181,
+        "l": 1.15128,
+        "c": 1.15128,
+        "e9": 1.15185,
+        "e21": 1.15214,
+        "bbu": 1.1532,
+        "bbl": 1.15138
+      },
+      {
+        "t": "2026-06-08 09:55:00+01:00",
+        "o": 1.15141,
+        "h": 1.15141,
+        "l": 1.15128,
+        "c": 1.15141,
+        "e9": 1.15176,
+        "e21": 1.15207,
+        "bbu": 1.15313,
+        "bbl": 1.15128
+      },
+      {
+        "t": "2026-06-08 10:00:00+01:00",
+        "o": 1.15115,
+        "h": 1.15141,
+        "l": 1.15115,
+        "c": 1.15141,
+        "e9": 1.15169,
+        "e21": 1.15201,
+        "bbu": 1.15307,
+        "bbl": 1.1512
+      },
+      {
+        "t": "2026-06-08 10:05:00+01:00",
+        "o": 1.15128,
+        "h": 1.15128,
+        "l": 1.15101,
+        "c": 1.15101,
+        "e9": 1.15156,
+        "e21": 1.15192,
+        "bbu": 1.15303,
+        "bbl": 1.15105
+      },
+      {
+        "t": "2026-06-08 10:10:00+01:00",
+        "o": 1.15101,
+        "h": 1.15101,
+        "l": 1.15088,
+        "c": 1.15088,
+        "e9": 1.15142,
+        "e21": 1.15183,
+        "bbu": 1.15298,
+        "bbl": 1.15091
+      },
+      {
+        "t": "2026-06-08 10:15:00+01:00",
+        "o": 1.15101,
+        "h": 1.15115,
+        "l": 1.15088,
+        "c": 1.15088,
+        "e9": 1.15131,
+        "e21": 1.15174,
+        "bbu": 1.15298,
+        "bbl": 1.15075
+      },
+      {
+        "t": "2026-06-08 10:20:00+01:00",
+        "o": 1.15101,
+        "h": 1.15101,
+        "l": 1.15088,
+        "c": 1.15088,
+        "e9": 1.15123,
+        "e21": 1.15166,
+        "bbu": 1.15289,
+        "bbl": 1.15066
+      },
+      {
+        "t": "2026-06-08 10:25:00+01:00",
+        "o": 1.15088,
+        "h": 1.15088,
+        "l": 1.15062,
+        "c": 1.15062,
+        "e9": 1.1511,
+        "e21": 1.15157,
+        "bbu": 1.15281,
+        "bbl": 1.15053
+      },
+      {
+        "t": "2026-06-08 10:30:00+01:00",
+        "o": 1.15048,
+        "h": 1.15062,
+        "l": 1.15035,
+        "c": 1.15035,
+        "e9": 1.15095,
+        "e21": 1.15146,
+        "bbu": 1.15277,
+        "bbl": 1.15035
+      },
+      {
+        "t": "2026-06-08 10:35:00+01:00",
+        "o": 1.15035,
+        "h": 1.15115,
+        "l": 1.15035,
+        "c": 1.15115,
+        "e9": 1.15099,
+        "e21": 1.15143,
+        "bbu": 1.15272,
+        "bbl": 1.15032
+      },
+      {
+        "t": "2026-06-08 10:40:00+01:00",
+        "o": 1.15128,
+        "h": 1.15128,
+        "l": 1.15075,
+        "c": 1.15088,
+        "e9": 1.15097,
+        "e21": 1.15138,
+        "bbu": 1.15264,
+        "bbl": 1.15026
+      },
+      {
+        "t": "2026-06-08 10:45:00+01:00",
+        "o": 1.15088,
+        "h": 1.15088,
+        "l": 1.15088,
+        "c": 1.15088,
+        "e9": 1.15095,
+        "e21": 1.15133,
+        "bbu": 1.15248,
+        "bbl": 1.15026
       }
     ]
   },
   "themes": {
-    "last_analysis": 1780903601.5193772,
-    "narrative": "Les secteurs de l'\u00e9nergie et de la d\u00e9fense a\u00e9rospatiale sont les plus affect\u00e9s par les tensions g\u00e9opolitiques et la guerre en Iran, avec des tendances haussi\u00e8res fortes. Les autres secteurs sont plus mitig\u00e9s, avec des impacts n\u00e9gatifs ou neutres en fonction de leur exposition aux facteurs g\u00e9opolitiques et \u00e9conomiques.",
+    "last_analysis": 1780911916.0895479,
+    "narrative": "Les secteurs de l'\u00e9nergie, de la d\u00e9fense et des semi-conducteurs sont les plus prometteurs en raison de la guerre en Iran et des tensions g\u00e9opolitiques. Les secteurs de la technologie et de la consommation sont affect\u00e9s n\u00e9gativement par les co\u00fbts et la demande en baisse.",
     "active_universe": [
       "LMT",
       "RTX",
@@ -976,99 +1558,112 @@
       "XOM",
       "CVX",
       "COP",
-      "SLB"
+      "SLB",
+      "NVDA",
+      "AMD",
+      "AVGO",
+      "QCOM",
+      "LLY",
+      "ABBV",
+      "MRK",
+      "PFE"
     ],
     "sectors": {
       "pharma_biotech": {
         "sector": "pharma_biotech",
         "label": "Pharma & Biotech",
-        "score": 0.2,
+        "score": 0.4,
         "momentum": "l\u00e9g\u00e8rement positif",
-        "reason": "Les actualit\u00e9s r\u00e9centes sur les m\u00e9dicaments contre l'ob\u00e9sit\u00e9 de Boehringer-Zealand montrent des promesses, mais l'impact global sur le secteur est limit\u00e9.",
+        "reason": "Les actualit\u00e9s r\u00e9centes sur les m\u00e9dicaments contre l'ob\u00e9sit\u00e9 et les performances des entreprises de sant\u00e9 sont positives.",
         "top_picks": [
           "LLY",
-          "ABBV"
+          "JNJ"
         ],
-        "article_count": 26
+        "article_count": 56
       },
       "ai_software": {
         "sector": "ai_software",
         "label": "IA & Logiciel",
-        "score": -0.4,
+        "score": -0.2,
         "momentum": "l\u00e9g\u00e8rement n\u00e9gatif",
-        "reason": "Les inqui\u00e9tudes sur les co\u00fbts et la demande li\u00e9es \u00e0 la guerre en Iran, ainsi que les pr\u00e9occupations sur les actions des hyperscalers, affectent n\u00e9gativement le secteur.",
+        "reason": "La baisse des actions de technologie et les inqui\u00e9tudes sur les co\u00fbts et la demande en raison de la guerre en Iran ont un impact n\u00e9gatif.",
         "top_picks": [
           "MSFT"
         ],
-        "article_count": 26
+        "article_count": 56
       },
       "semiconductors": {
         "sector": "semiconductors",
         "label": "Semi-conducteurs",
-        "score": -0.2,
-        "momentum": "l\u00e9g\u00e8rement n\u00e9gatif",
-        "reason": "La guerre en Iran et les tensions g\u00e9opolitiques pourraient affecter la cha\u00eene d'approvisionnement, mais l'annonce de Naver sur la construction de gigawatt-scale AI factories est un signe positif.",
+        "score": 0.6,
+        "momentum": "haussier",
+        "reason": "Les performances des entreprises de semi-conducteurs et les investissements dans les usines d'AI sont prometteurs.",
         "top_picks": [
-          "NVDA"
+          "NVDA",
+          "AMD"
         ],
-        "article_count": 26
+        "article_count": 56
       },
       "energy": {
         "sector": "energy",
         "label": "\u00c9nergie",
         "score": 0.8,
-        "momentum": "tendance haussi\u00e8re forte",
-        "reason": "Les prix du p\u00e9trole augmentent en raison des tensions au Moyen-Orient et des attaques contre les installations p\u00e9trochimiques en Iran.",
+        "momentum": "haussier fort",
+        "reason": "La guerre en Iran et les tensions g\u00e9opolitiques ont fait augmenter les prix du p\u00e9trole.",
         "top_picks": [
           "XOM",
           "CVX"
         ],
-        "article_count": 26
+        "article_count": 56
       },
       "fintech_banking": {
         "sector": "fintech_banking",
         "label": "Finance & Banque",
-        "score": -0.1,
-        "momentum": "neutre",
-        "reason": "Les tensions g\u00e9opolitiques et la guerre en Iran n'ont pas d'impact direct sur le secteur, mais les pr\u00e9occupations sur l'\u00e9conomie globale pourraient affecter les banques.",
+        "score": -0.4,
+        "momentum": "n\u00e9gatif",
+        "reason": "Les inqui\u00e9tudes sur la guerre en Iran et les cons\u00e9quences sur l'\u00e9conomie ont un impact n\u00e9gatif sur les banques.",
         "top_picks": [
-          "JPM"
+          "JPM",
+          "GS",
+          "MS"
         ],
-        "article_count": 26
+        "article_count": 56
       },
       "ev_clean_energy": {
         "sector": "ev_clean_energy",
         "label": "VE & \u00c9nergie propre",
-        "score": 0.1,
+        "score": 0.2,
         "momentum": "neutre",
-        "reason": "Les prix \u00e9lev\u00e9s du p\u00e9trole pourraient favoriser les \u00e9nergies renouvelables, mais l'impact est limit\u00e9 pour le moment.",
+        "reason": "Les performances des entreprises d'\u00e9nergie verte sont stables, mais les co\u00fbts et la demande sont affect\u00e9s par la guerre en Iran.",
         "top_picks": [
           "TSLA"
         ],
-        "article_count": 26
+        "article_count": 56
       },
       "defense_aerospace": {
         "sector": "defense_aerospace",
         "label": "D\u00e9fense & A\u00e9ro",
         "score": 0.9,
-        "momentum": "tendance haussi\u00e8re forte",
-        "reason": "La guerre en Iran et les tensions g\u00e9opolitiques augmentent la demande pour les produits de d\u00e9fense et les services a\u00e9rospatiaux.",
+        "momentum": "haussier fort",
+        "reason": "La guerre en Iran et les tensions g\u00e9opolitiques ont fait augmenter les d\u00e9penses de d\u00e9fense.",
         "top_picks": [
           "LMT",
           "RTX"
         ],
-        "article_count": 26
+        "article_count": 56
       },
       "retail_consumer": {
         "sector": "retail_consumer",
         "label": "Distribution & Conso",
-        "score": -0.3,
-        "momentum": "l\u00e9g\u00e8rement n\u00e9gatif",
-        "reason": "Les tensions g\u00e9opolitiques et la guerre en Iran pourraient affecter la confiance des consommateurs et les d\u00e9penses.",
+        "score": -0.6,
+        "momentum": "n\u00e9gatif",
+        "reason": "Les cons\u00e9quences de la guerre en Iran sur l'\u00e9conomie et les consommateurs ont un impact n\u00e9gatif sur le secteur.",
         "top_picks": [
-          "AMZN"
+          "AMZN",
+          "WMT",
+          "COST"
         ],
-        "article_count": 26
+        "article_count": 56
       }
     }
   }

@@ -87,20 +87,52 @@ REGIME_ICON = {
 RISK_COLOR = {"low": C_GREEN, "medium": C_YELLOW, "high": C_ORANGE, "extreme": C_RED}
 
 STRATEGY_INFO = {
+    # ── Swing / Actions ─────────────────────────────────────────────────────
+    "trend_following": {
+        "name": "Tendance (EMA)", "icon": "↗", "color": "#38a169",
+        "desc": "Achète sur une tendance haussière confirmée : EMA20 > EMA50 > EMA200 + ADX ≥ 15. Stop/TP basés sur l'ATR.",
+        "when": "Bull trend / Breakout / Unknown",
+    },
+    "breakout": {
+        "name": "Cassure N-jours", "icon": "▲", "color": "#3182ce",
+        "desc": "Entre sur une cassure du plus haut ou plus bas sur 20 jours, alignée avec l'EMA200. Capture les grandes tendances.",
+        "when": "Bull trend / Breakout expansion",
+    },
+    "rsi_dip_buyer": {
+        "name": "Dip RSI(2)", "icon": "↩", "color": "#805ad5",
+        "desc": "Achète quand le RSI(2) passe sous 20 (survente court terme) au-dessus de la SMA200. Pari sur un rebond rapide.",
+        "when": "Range / Bull trend / Unknown",
+    },
+    "thematic_momentum": {
+        "name": "Momentum Sectoriel", "icon": "🏭", "color": "#dd6b20",
+        "desc": "Analyse les news par secteur via Groq LLM → achète les actions des secteurs haussiers identifiés (pharma, IA, semi…).",
+        "when": "Tous régimes (score secteur > 0.25)",
+    },
+    "ema_cross_swing": {
+        "name": "EMA Cross Rapide", "icon": "⚡", "color": "#e53e3e",
+        "desc": "Achete des que EMA9 passe au-dessus de EMA21 (daily). Tres reactif, se declenche sur n'importe quel changement de tendance court terme.",
+        "when": "Tous regimes sauf panique",
+    },
+    "momentum_burst": {
+        "name": "Momentum Burst", "icon": "🚀", "color": "#dd6b20",
+        "desc": "Achete les actions avec momentum positif sur 5 jours (prix > EMA20 + retour > 0.5%). Capture les hausses rapides.",
+        "when": "Tous regimes sauf panique",
+    },
+    # ── Intraday Forex ───────────────────────────────────────────────────────
     "intraday_ema_cross": {
-        "name": "Croisement EMA", "icon": "✕", "color": "#3182ce",
-        "desc": "Achète quand la moyenne courte (EMA 9) passe au-dessus de la moyenne longue (EMA 21). Idéal en marché directionnel.",
-        "when": "Tous régimes sauf panique",
+        "name": "Croisement EMA (Forex)", "icon": "✕", "color": "#3182ce",
+        "desc": "Achète EUR/USD quand l'EMA 9 passe au-dessus de l'EMA 21 sur 5 min. Idéal en marché directionnel.",
+        "when": "Tous régimes sauf panique (lun-ven)",
     },
     "intraday_bollinger_rsi": {
-        "name": "Bollinger + RSI", "icon": "〜", "color": "#805ad5",
-        "desc": "Achète quand le prix touche la bande basse de Bollinger ET que le RSI < 35. Parie sur un retour vers la moyenne. Idéal en range.",
-        "when": "Range / Basse volatilité",
+        "name": "Bollinger + RSI (Forex)", "icon": "〜", "color": "#805ad5",
+        "desc": "Achète EUR/USD quand le prix touche la bande basse Bollinger ET RSI < 35. Retour à la moyenne. Idéal en range.",
+        "when": "Range / Basse volatilité (lun-ven)",
     },
     "intraday_session_breakout": {
-        "name": "Cassure de Session", "icon": "▶", "color": "#38a169",
-        "desc": "Entre dans le sens de la cassure du range pré-session. Fenêtres actives : Londres 07h00-09h30 UTC, New York 13h30-16h00 UTC.",
-        "when": "Ouverture London / NY",
+        "name": "Cassure de Session (Forex)", "icon": "▶", "color": "#38a169",
+        "desc": "Entre dans le sens de la cassure du range pré-session. Londres 07h-09h30 UTC, New York 13h30-16h UTC.",
+        "when": "Ouverture London / NY (lun-ven)",
     },
 }
 
@@ -108,14 +140,16 @@ TABS = [
     ("overview",   "Vue globale"),
     ("eurusd",     "EUR/USD Live"),
     ("strategies", "Strategies"),
+    ("positions",  "Positions Live"),
     ("portfolio",  "Portefeuille"),
     ("regime",     "Regime et IA"),
     ("analyse",    "Analyse Groq"),
-    ("themes",     "Thèmes & Secteurs"),
+    ("themes",     "Themes & Secteurs"),
 ]
 
 # Cache yfinance pour ne pas refetcher a chaque refresh
 _eur_yf_cache: dict = {"ts": 0.0, "data": {}}
+_equity_chart_cache: dict = {"ts": 0.0, "data": {}}
 
 
 # ── Lecture des sources de données ───────────────────────────────────────────
@@ -567,9 +601,9 @@ def page_overview(state: dict, alpaca: dict) -> html.Div:
 
     # Status banner
     status_info = {
-        "live":    ("Bot EUR/USD actif — données en temps réel", C_GREEN, "#f0fff4"),
+        "live":    ("Bot Paper Trading actif — données en temps réel", C_GREEN, "#f0fff4"),
         "delayed": ("Données récentes (< 1h)", C_YELLOW, "#fffff0"),
-        "offline": ("Bot EUR/USD hors ligne — lancez src/main.py", C_RED, "#fff5f5"),
+        "offline": ("Bot hors ligne — lancez src/main.py", C_RED, "#fff5f5"),
     }
     st_text, st_col, st_bg = status_info[fresh]
     banner = html.Div(st_text, style={
@@ -591,7 +625,7 @@ def page_overview(state: dict, alpaca: dict) -> html.Div:
     reg_icon  = REGIME_ICON.get(regime, "?")
 
     eur_kpis = html.Div([
-        html.Div("Bot EUR/USD (Intraday 5min)", style={
+        html.Div("Bot Paper Trading (EUR/USD Intraday)", style={
             "fontSize": "11px", "fontWeight": "900", "color": C_ACCENT,
             "textTransform": "uppercase", "letterSpacing": "0.8px",
             "marginBottom": "10px",
@@ -880,15 +914,23 @@ def page_strategies(state: dict) -> html.Div:
     regime    = state.get("market", {}).get("regime", "unknown")
     regime_fr = state.get("market", {}).get("regime_fr", "Inconnu")
 
+    # Check if forex market is likely closed (no intraday signals recently)
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc)
+    is_weekend = now_utc.weekday() >= 5  # Saturday=5, Sunday=6
+    has_intraday = any(s.get("strategy", "").startswith("intraday_") for s in sigs)
+    forex_closed = is_weekend or not has_intraday
+
     regime_map = {
-        "bull_trend":        ["Croisement EMA", "Cassure de Session"],
-        "bear_trend":        ["Croisement EMA", "Cassure de Session"],
-        "range":             ["Bollinger + RSI", "Croisement EMA"],
-        "high_volatility":   ["Croisement EMA"],
-        "low_volatility":    ["Bollinger + RSI", "Croisement EMA"],
+        "bull_trend":        ["Tendance (EMA)", "Cassure N-jours", "Momentum Sectoriel", "Croisement EMA (Forex)", "Cassure de Session (Forex)"],
+        "bear_trend":        ["Momentum Sectoriel", "Croisement EMA (Forex)"],
+        "range":             ["Dip RSI(2)", "Momentum Sectoriel", "Bollinger + RSI (Forex)", "Croisement EMA (Forex)"],
+        "high_volatility":   ["Dip RSI(2)", "Croisement EMA (Forex)"],
+        "low_volatility":    ["Tendance (EMA)", "Momentum Sectoriel", "Bollinger + RSI (Forex)", "Croisement EMA (Forex)"],
         "panic":             ["Aucune — pause"],
-        "compression":       ["Bollinger + RSI", "Cassure de Session"],
-        "breakout_expansion":["Cassure de Session", "Croisement EMA"],
+        "compression":       ["Bollinger + RSI (Forex)", "Cassure de Session (Forex)"],
+        "breakout_expansion":["Cassure N-jours", "Tendance (EMA)", "Cassure de Session (Forex)", "Croisement EMA (Forex)"],
+        "unknown":           ["Tendance (EMA)", "Dip RSI(2)", "Momentum Sectoriel", "Croisement EMA (Forex)"],
     }
     active_strats = regime_map.get(regime, ["Selon régime"])
 
@@ -898,10 +940,29 @@ def page_strategies(state: dict) -> html.Div:
             html.Span(f"{REGIME_ICON.get(regime,'?')} {regime_fr}  → ", style={"color": C_MUTED}),
             *[badge(s, C_ACCENT) for s in active_strats],
         ], style={"display": "flex", "alignItems": "center", "gap": "6px", "flexWrap": "wrap"}),
+        html.Div("⚠ Forex fermé ce week-end — stratégies intraday EUR/USD en pause jusqu'à lundi 07h UTC.", style={
+            "marginTop": "8px", "fontSize": "12px", "color": C_ORANGE, "fontWeight": "600",
+        }) if forex_closed else None,
     ])
 
+    swing_ids    = {"trend_following", "breakout", "rsi_dip_buyer", "thematic_momentum",
+                    "ema_cross_swing", "momentum_burst"}
+    intraday_ids = {"intraday_ema_cross", "intraday_bollinger_rsi", "intraday_session_breakout"}
+
     cards = []
+    prev_group = None
     for strat_id, info in STRATEGY_INFO.items():
+        # Section separator between swing and intraday groups
+        group = "swing" if strat_id in swing_ids else "intraday"
+        if group != prev_group:
+            label = "Actions & ETF (Swing)" if group == "swing" else "EUR/USD Forex (Intraday 5min)"
+            cards.append(html.Div(label, style={
+                "fontSize": "11px", "fontWeight": "800", "textTransform": "uppercase",
+                "letterSpacing": "0.08em", "color": C_MUTED,
+                "padding": "6px 0 4px",
+            }))
+            prev_group = group
+
         last     = last_sig.get(strat_id, {})
         action   = last.get("action", "")
         last_t   = str(last.get("time", "—"))[:16]
@@ -909,8 +970,9 @@ def page_strategies(state: dict) -> html.Div:
         conf     = float(last.get("confidence", 0) or 0)
         is_exec  = action == "EXECUTE"
         is_block = action == "BLOCK"
-        st_color = C_GREEN if is_exec else (C_ORANGE if is_block else C_MUTED)
-        st_text  = "Ordre execute" if is_exec else ("Signal bloque" if is_block else "En surveillance")
+        is_notrade = action == "NO_TRADE"
+        st_color = C_GREEN if is_exec else (C_ORANGE if is_block else (C_MUTED if is_notrade else C_MUTED))
+        st_text  = "Ordre execute" if is_exec else ("Signal bloque" if is_block else ("Analysé / NO_TRADE" if is_notrade else "En surveillance"))
 
         cards.append(html.Div([
             html.Div([
@@ -957,6 +1019,475 @@ def page_strategies(state: dict) -> html.Div:
         regime_info,
         html.Div(cards, style={"display": "flex", "flexDirection": "column", "gap": "12px"}),
     ])
+
+
+# ── Page : Positions Live ─────────────────────────────────────────────────────
+
+def _fetch_position_charts(tickers: list) -> dict:
+    """Fetch 6-month daily OHLCV + EMA for position charts. Cached 10min."""
+    import time as _t
+    now = _t.time()
+    if now - _equity_chart_cache["ts"] < 600 and _equity_chart_cache["data"]:
+        return _equity_chart_cache["data"]
+    try:
+        import yfinance as yf
+        from src.data.yfinance_helpers import normalize_yfinance_columns
+        from src.features.indicators import ema as _ema, rsi as _rsi, atr as _atr
+    except ImportError:
+        return {}
+
+    data = {}
+    for t in (tickers or []):
+        if t.endswith("=X") or t.startswith("^"):
+            continue
+        try:
+            df = yf.download(t, period="6mo", interval="1d", auto_adjust=True, progress=False)
+            if df.empty or len(df) < 10:
+                continue
+            df = normalize_yfinance_columns(df)
+            c = df["close"]
+            df = df.copy()
+            df["ema20"]  = _ema(c, 20)
+            df["ema50"]  = _ema(c, 50)
+            df["ema200"] = _ema(c, 200)
+            df["rsi14"]  = _rsi(c, 14)
+            data[t] = df
+        except Exception:
+            pass
+
+    _equity_chart_cache["ts"] = now
+    _equity_chart_cache["data"] = data
+    return data
+
+
+def _position_chart(df, entry_price: float, sl, tp, opened_at: str) -> "go.Figure":
+    """Build price chart for one position with EMA + entry/SL/TP lines."""
+    import plotly.graph_objects as go
+
+    df90 = df.iloc[-90:].copy()
+    dates = df90.index
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=dates, y=df90["close"], name="Prix",
+        line={"color": "#3182ce", "width": 2},
+        hovertemplate="%{y:.2f}<extra></extra>",
+    ))
+    if "ema20" in df90.columns:
+        fig.add_trace(go.Scatter(
+            x=dates, y=df90["ema20"], name="EMA20",
+            line={"color": "#38a169", "width": 1.5, "dash": "dot"},
+            hovertemplate="%{y:.2f}<extra>EMA20</extra>",
+        ))
+    if "ema50" in df90.columns:
+        fig.add_trace(go.Scatter(
+            x=dates, y=df90["ema50"], name="EMA50",
+            line={"color": "#dd6b20", "width": 1.5, "dash": "dot"},
+            hovertemplate="%{y:.2f}<extra>EMA50</extra>",
+        ))
+
+    # Horizontal levels
+    fig.add_hline(y=entry_price, line_dash="dash", line_color="#3182ce", line_width=1.5,
+                  annotation_text=f"Entree ${entry_price:.2f}",
+                  annotation_font={"size": 10, "color": "#3182ce"})
+    if sl:
+        fig.add_hline(y=float(sl), line_dash="dash", line_color="#e53e3e", line_width=1.2,
+                      annotation_text=f"Stop ${float(sl):.2f}",
+                      annotation_font={"size": 10, "color": "#e53e3e"})
+    if tp:
+        fig.add_hline(y=float(tp), line_dash="dash", line_color="#38a169", line_width=1.2,
+                      annotation_text=f"Objectif ${float(tp):.2f}",
+                      annotation_font={"size": 10, "color": "#38a169"})
+
+    # Vertical line at entry date
+    if opened_at and len(opened_at) >= 10:
+        try:
+            import pandas as pd
+            entry_date = pd.Timestamp(opened_at[:10])
+            if entry_date >= dates[0]:
+                fig.add_vline(x=entry_date, line_dash="dash",
+                              line_color="#7c3aed", line_width=1.5, opacity=0.7,
+                              annotation_text="Achat", annotation_font={"size": 10, "color": "#7c3aed"})
+        except Exception:
+            pass
+
+    fig.update_layout(
+        height=260, margin={"l": 30, "r": 10, "t": 10, "b": 30},
+        paper_bgcolor="white", plot_bgcolor="#f7fafc",
+        showlegend=True,
+        legend={"orientation": "h", "y": -0.18, "x": 0, "font": {"size": 11}},
+        xaxis={"gridcolor": "#e2e8f0", "showgrid": True},
+        yaxis={"gridcolor": "#e2e8f0", "showgrid": True},
+        hovermode="x unified",
+    )
+    return fig
+
+
+def _get_sector_info(asset: str, themes: dict) -> tuple:
+    """Return (sector_label, score, reason, top_picks) for an asset."""
+    try:
+        from src.analysis.sector_universe import SECTOR_UNIVERSE
+        for sk, info in SECTOR_UNIVERSE.items():
+            if asset in info.get("tickers", []):
+                theme = themes.get(sk, {})
+                score  = float(theme.get("score", 0)) if isinstance(theme, dict) else 0.0
+                reason = theme.get("reason", "") if isinstance(theme, dict) else ""
+                picks  = theme.get("top_picks", []) if isinstance(theme, dict) else []
+                return info.get("label", sk), score, reason, picks
+    except Exception:
+        pass
+    return None, 0.0, "", []
+
+
+def _trend_summary(df, theme_score: float) -> tuple:
+    """Return (trend_text, color) based on EMA alignment + theme score."""
+    if df is None or len(df) < 20:
+        return "Donnees insuffisantes", C_MUTED
+    try:
+        last = df.iloc[-1]
+        e20  = float(last.get("ema20", 0))
+        e50  = float(last.get("ema50", 0))
+        price = float(last["close"])
+        if e20 > e50 and price > e20:
+            ema_trend = "hausse"
+        elif e20 < e50 and price < e20:
+            ema_trend = "baisse"
+        else:
+            ema_trend = "neutre"
+
+        rsi14 = float(last.get("rsi14", 50))
+        rsi_txt = "suracheté" if rsi14 > 70 else ("survendu" if rsi14 < 30 else f"RSI={rsi14:.0f}")
+
+        if ema_trend == "hausse" and theme_score >= 0:
+            return f"Haussier ({rsi_txt})", C_GREEN
+        if ema_trend == "baisse" and theme_score <= 0:
+            return f"Baissier ({rsi_txt})", C_RED
+        return f"Mixte — EMA {ema_trend} ({rsi_txt})", C_YELLOW
+    except Exception:
+        return "Analyse indisponible", C_MUTED
+
+
+def page_positions(state: dict) -> html.Div:
+    """Live positions page: one card per held stock with chart + analysis."""
+    import plotly.graph_objects as go
+
+    pos_list = state.get("positions", [])
+    trades   = state.get("recent_trades", [])
+    themes   = state.get("themes", {})
+    port     = state.get("portfolio", {})
+    news     = state.get("news", [])
+
+    equity_pos = [p for p in pos_list if not p["asset"].endswith("=X")]
+    forex_pos  = [p for p in pos_list if p["asset"].endswith("=X")]
+
+    # Fetch charts
+    tickers = [p["asset"] for p in equity_pos]
+    chart_data = _fetch_position_charts(tickers)
+
+    # KPI bar
+    total_unreal = sum(float(p.get("unrealized_pnl", 0)) for p in pos_list)
+    total_val    = sum(float(p.get("market_value",   0)) for p in pos_list)
+    total_real   = sum(float(t.get("pnl", 0)) for t in trades)
+    exposure     = float(port.get("total_exposure", 0) or 0)
+    total_val    = exposure or total_val
+    cash         = float(port.get("available_cash", port.get("cash", 0)) or 0)
+
+    kpis = html.Div([
+        kpi_card("Positions ouvertes", str(len(pos_list)),
+                 color=C_ACCENT if pos_list else C_MUTED),
+        kpi_card("Exposition brute", f"${total_val:,.2f}", color=C_ACCENT),
+        kpi_card("P&L non realise", f"${total_unreal:+,.2f}",
+                 color=C_GREEN if total_unreal >= 0 else C_RED),
+        kpi_card("P&L realise (total)", f"${total_real:+,.2f}",
+                 color=C_GREEN if total_real >= 0 else C_RED),
+        kpi_card("Cash disponible", f"${cash:,.2f}"),
+    ], style={"display": "grid", "gridTemplateColumns": "repeat(5,1fr)",
+              "gap": "10px", "marginBottom": "14px"})
+
+    # Empty state
+    if not pos_list:
+        empty = html.Div([
+            html.Div("Aucune position ouverte", style={
+                "fontWeight": "800", "fontSize": "16px", "marginBottom": "8px",
+            }),
+            html.Div(
+                "Le bot surveille le marche et placera des ordres des que les conditions "
+                "de signal sont reunies (RSI oversold, tendance sectorielle positive, "
+                "EMA alignee).",
+                style={"color": C_MUTED, "fontSize": "13px", "lineHeight": "1.6",
+                       "maxWidth": "480px", "margin": "0 auto"},
+            ),
+        ], style={
+            "textAlign": "center", "padding": "60px 20px",
+            "background": C_PANEL, "borderRadius": "12px",
+            "border": f"2px dashed {C_BORDER}",
+        })
+        # Still show trade history even when no open positions
+        return html.Div([kpis, empty, _closed_trades_panel(trades)])
+
+    cards = []
+
+    # ── Equity position cards ─────────────────────────────────────────────────
+    for p in equity_pos:
+        asset   = p["asset"]
+        entry   = float(p.get("avg_entry",       0))
+        current = float(p.get("current_price",   0))
+        qty     = float(p.get("quantity",         0))
+        pnl     = float(p.get("unrealized_pnl",  0))
+        pnl_pct = float(p.get("unrealized_pnl_pct", 0)) * 100
+        sl      = p.get("stop_loss")
+        tp      = p.get("take_profit")
+        strat   = p.get("strategy",  "—")
+        opened  = p.get("opened_at", "—")
+        side    = p.get("side", "long")
+
+        is_up      = pnl >= 0
+        pnl_color  = C_GREEN if is_up else C_RED
+        arrow      = "+" if is_up else ""
+
+        # R:R
+        rr_txt = "—"
+        if sl and tp and entry > 0:
+            try:
+                risk   = abs(entry - float(sl))
+                reward = abs(float(tp) - entry)
+                if risk > 0:
+                    rr_txt = f"{reward/risk:.1f}x"
+            except Exception:
+                pass
+
+        # Sector + theme
+        sector_label, theme_score, theme_reason, top_picks = _get_sector_info(asset, themes)
+        trend_text, trend_color = _trend_summary(chart_data.get(asset), theme_score)
+
+        # Chart
+        df = chart_data.get(asset)
+        if df is not None and len(df) > 10:
+            fig = _position_chart(df, entry, sl, tp, str(opened))
+            chart_el = dcc.Graph(figure=fig, config={"displayModeBar": True,
+                                                      "modeBarButtonsToRemove": ["lasso2d","select2d"]})
+        else:
+            chart_el = html.Div(
+                "Graphique indisponible — les donnees seront chargees au prochain cycle.",
+                style={"color": C_MUTED, "padding": "30px", "textAlign": "center",
+                       "fontSize": "12px"},
+            )
+
+        # News snippets for this sector
+        sector_news = []
+        if sector_label:
+            for art in (news or [])[:50]:
+                headline = (art.get("headline") or art.get("title") or "")
+                if any(w.lower() in headline.lower()
+                       for w in [asset] + (top_picks or [])[:3]):
+                    sector_news.append(headline[:100])
+                    if len(sector_news) >= 2:
+                        break
+
+        card = html.Div([
+            # ── Header ───────────────────────────────────────────────────────
+            html.Div([
+                html.Div([
+                    html.Span(asset, style={
+                        "fontWeight": "900", "fontSize": "22px", "marginRight": "8px",
+                    }),
+                    html.Span(side.upper(), style={
+                        "background": C_GREEN if side == "long" else C_RED,
+                        "color": "white", "fontSize": "10px", "fontWeight": "800",
+                        "borderRadius": "4px", "padding": "2px 7px",
+                    }),
+                    html.Span(f" {qty:.4f} actions",
+                              style={"color": C_MUTED, "fontSize": "12px", "marginLeft": "6px"}),
+                ], style={"display": "flex", "alignItems": "center"}),
+                html.Div([
+                    html.Span(f"{arrow}{pnl_pct:.2f}%", style={
+                        "fontWeight": "900", "fontSize": "20px", "color": pnl_color,
+                    }),
+                    html.Span(f"  ${pnl:+,.2f}", style={
+                        "fontWeight": "600", "fontSize": "14px", "color": pnl_color,
+                    }),
+                ], style={"display": "flex", "alignItems": "baseline", "gap": "4px"}),
+            ], style={
+                "display": "flex", "justifyContent": "space-between", "alignItems": "center",
+                "padding": "12px 16px 10px",
+                "background": f"linear-gradient(135deg, {pnl_color}10, white)",
+                "borderBottom": f"1px solid {C_BORDER}",
+            }),
+
+            # ── Price strip ───────────────────────────────────────────────────
+            html.Div([
+                _mini_stat("Entree",   f"${entry:,.2f}"),
+                _mini_stat("Actuel",   f"${current:,.2f}", pnl_color),
+                _mini_stat("Stop",     f"${float(sl):,.2f}" if sl else "—", C_RED),
+                _mini_stat("Objectif", f"${float(tp):,.2f}" if tp else "—", C_GREEN),
+                _mini_stat("R:R",      rr_txt, C_ACCENT),
+                _mini_stat("Strategie", strat),
+                _mini_stat("Ouvert le", str(opened)[:10]),
+            ], style={
+                "display": "flex", "gap": "18px", "flexWrap": "wrap",
+                "padding": "8px 16px", "borderBottom": f"1px solid {C_BORDER}",
+                "background": "#fafbfc",
+            }),
+
+            # ── Chart ─────────────────────────────────────────────────────────
+            chart_el,
+
+            # ── Analysis footer ───────────────────────────────────────────────
+            html.Div([
+                html.Div([
+                    # Trend badge
+                    html.Div([
+                        html.Span("Tendance : ", style={"color": C_MUTED, "fontSize": "12px"}),
+                        html.Span(trend_text, style={
+                            "fontWeight": "700", "fontSize": "12px", "color": trend_color,
+                        }),
+                    ], style={"marginBottom": "6px"}),
+
+                    # Sector + score
+                    html.Div([
+                        html.Span("Secteur : ", style={"color": C_MUTED, "fontSize": "12px"}),
+                        html.Span(sector_label or "Non classe",
+                                  style={"fontWeight": "700", "fontSize": "12px"}),
+                        html.Span(
+                            f"  Score LLM : {theme_score:+.2f}",
+                            style={
+                                "marginLeft": "10px", "fontSize": "12px",
+                                "color": C_GREEN if theme_score > 0.2 else (C_RED if theme_score < -0.2 else C_MUTED),
+                                "fontWeight": "700",
+                            },
+                        ) if theme_score != 0 else None,
+                    ], style={"marginBottom": "4px"}) if sector_label else None,
+
+                    # Theme reason
+                    html.Div(
+                        theme_reason[:160] if theme_reason else
+                        "Analyse sectorielle: en attente de la prochaine analyse Groq.",
+                        style={
+                            "fontSize": "12px", "color": C_MUTED,
+                            "fontStyle": "italic", "marginBottom": "6px",
+                        },
+                    ),
+
+                    # News snippets
+                    *[html.Div(f"  {n}", style={
+                        "fontSize": "11px", "color": C_MUTED,
+                        "padding": "2px 0", "borderLeft": f"3px solid {C_ACCENT}30",
+                        "paddingLeft": "8px",
+                    }) for n in sector_news],
+                ]),
+            ], style={
+                "padding": "10px 16px",
+                "borderTop": f"1px solid {C_BORDER}",
+                "background": "#f8fafc",
+            }),
+        ], style={
+            "background": C_PANEL,
+            "border": f"1px solid {C_BORDER}",
+            "borderLeft": f"5px solid {pnl_color}",
+            "borderRadius": "12px",
+            "overflow": "hidden",
+            "marginBottom": "14px",
+            "boxShadow": "0 1px 4px rgba(0,0,0,0.06)",
+        })
+        cards.append(card)
+
+    # ── Forex positions table ─────────────────────────────────────────────────
+    if forex_pos:
+        fx_rows = [{
+            "asset": p["asset"],
+            "qty":   str(p.get("quantity", "—")),
+            "entree": f"${float(p.get('avg_entry', 0)):,.4f}",
+            "actuel": f"${float(p.get('current_price', 0)):,.4f}",
+            "pnl":    f"${float(p.get('unrealized_pnl', 0)):+,.4f}",
+            "strat":  p.get("strategy", "—"),
+        } for p in forex_pos]
+
+        cards.append(html.Div([
+            html.Div("Positions Forex (EUR/USD)", style={
+                "padding": "8px 16px", "fontWeight": "800", "fontSize": "13px",
+                "borderBottom": f"1px solid {C_BORDER}",
+            }),
+            dash_table.DataTable(
+                columns=[
+                    {"name": "Actif",      "id": "asset"},
+                    {"name": "Qte",        "id": "qty"},
+                    {"name": "Entree",     "id": "entree"},
+                    {"name": "Actuel",     "id": "actuel"},
+                    {"name": "P&L",        "id": "pnl"},
+                    {"name": "Strategie",  "id": "strat"},
+                ],
+                data=fx_rows, page_size=10,
+                style_table={"overflowX": "auto"},
+                style_header={"backgroundColor": "#ebf8ff", "fontWeight": "700", "fontSize": "11px"},
+                style_cell={"fontSize": "12px", "padding": "6px 10px"},
+            ),
+        ], style={"background": C_PANEL, "border": f"1px solid {C_BORDER}",
+                  "borderRadius": "10px", "overflow": "hidden", "marginBottom": "14px"}))
+
+    return html.Div([kpis] + cards + [_closed_trades_panel(trades)])
+
+
+def _mini_stat(label: str, value: str, color: str = C_TEXT) -> html.Div:
+    """Small label+value block used in the price strip."""
+    return html.Div([
+        html.Div(label, style={"color": C_MUTED, "fontSize": "10px", "fontWeight": "600",
+                               "textTransform": "uppercase", "letterSpacing": "0.04em"}),
+        html.Div(value, style={"fontWeight": "700", "fontSize": "13px", "color": color}),
+    ])
+
+
+def _closed_trades_panel(trades: list) -> html.Div:
+    """Compact table of recently closed trades."""
+    if not trades:
+        return html.Div()
+    rows = []
+    for t in reversed(trades[-30:]):
+        pnl = float(t.get("pnl", 0) or 0)
+        ep  = float(t.get("entry_price", 1) or 1)
+        qty = float(t.get("quantity", 1) or 1)
+        rows.append({
+            "asset":  t.get("asset", "—"),
+            "side":   t.get("side", "—"),
+            "entree": f"${float(t.get('entry_price', 0)):,.4f}",
+            "sortie": f"${float(t.get('exit_price', 0)):,.4f}",
+            "pnl":    f"${pnl:+,.4f}",
+            "pct":    _safe_pct(pnl, ep * qty) if ep * qty else "—",
+            "raison": t.get("exit_reason", "—"),
+            "strat":  t.get("strategy", "—"),
+            "date":   str(t.get("closed_at", "—"))[:16],
+        })
+    return html.Div([
+        html.Div(f"Historique des trades fermes ({len(trades)})", style={
+            "padding": "10px 16px", "fontWeight": "800", "fontSize": "13px",
+            "borderBottom": f"1px solid {C_BORDER}",
+        }),
+        dash_table.DataTable(
+            columns=[
+                {"name": "Actif",      "id": "asset"},
+                {"name": "Cote",       "id": "side"},
+                {"name": "Entree",     "id": "entree"},
+                {"name": "Sortie",     "id": "sortie"},
+                {"name": "P&L $",      "id": "pnl"},
+                {"name": "P&L %",      "id": "pct"},
+                {"name": "Raison",     "id": "raison"},
+                {"name": "Strategie",  "id": "strat"},
+                {"name": "Date",       "id": "date"},
+            ],
+            data=rows, page_size=15,
+            style_table={"overflowX": "auto"},
+            style_header={"backgroundColor": "#ebf8ff", "fontWeight": "700",
+                          "fontSize": "11px", "border": f"1px solid {C_ACCENT}20"},
+            style_cell={"fontSize": "12px", "padding": "7px 10px"},
+            style_data_conditional=[
+                {"if": {"filter_query": '{pnl} contains "+"', "column_id": "pnl"},
+                 "color": C_GREEN, "fontWeight": "700"},
+                {"if": {"filter_query": '{pnl} contains "-"', "column_id": "pnl"},
+                 "color": C_RED, "fontWeight": "700"},
+                {"if": {"row_index": "odd"}, "backgroundColor": "#f7fbff"},
+            ],
+        ),
+    ], style={"background": C_PANEL, "border": f"1px solid {C_ACCENT}30",
+              "borderRadius": "10px", "overflow": "hidden", "marginTop": "14px"})
 
 
 # ── Page : Portefeuille ───────────────────────────────────────────────────────
@@ -1101,8 +1632,8 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
 
         sections += [alp_kpis, alp_eq_panel, alp_pos_panel, alp_trades_panel]
 
-    # ─── SECTION EUR/USD BOT ───────────────────────────────────────────────
-    sections.append(section_header("Bot EUR/USD Intraday", C_ACCENT))
+    # ─── SECTION BOT PAPER TRADING ────────────────────────────────────────
+    sections.append(section_header("Bot Paper Trading (Actions & Forex)", C_ACCENT))
 
     initial = float(port.get("initial_capital", 10_000))
     equity  = float(port.get("total_equity", initial))
@@ -1111,8 +1642,8 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
     eur_kpis = html.Div([
         kpi_card("Capital total", f"${equity:,.2f}",
                  color=C_GREEN if equity >= initial else C_RED,
-                 tooltip="Cash + positions EUR/USD ouvertes"),
-        kpi_card("Cash dispo", f"${float(port.get('cash', 0)):,.2f}"),
+                 tooltip="Cash + toutes positions ouvertes"),
+        kpi_card("Cash dispo", f"${float(port.get('available_cash', port.get('cash', 0))):,.2f}"),
         kpi_card("P&L non realise", f"${float(port.get('open_pnl', 0)):+,.2f}",
                  color=C_GREEN if float(port.get('open_pnl', 0)) >= 0 else C_RED),
         kpi_card("P&L realise", f"${float(port.get('realized_pnl', 0)):+,.2f}",
@@ -1125,7 +1656,7 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
     ], style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)",
               "gap": "10px", "marginBottom": "14px"})
 
-    eur_eq_fig = equity_chart(hist, initial, "Courbe equite EUR/USD Bot", C_ACCENT)
+    eur_eq_fig = equity_chart(hist, initial, "Courbe equite Paper Bot", C_ACCENT)
     eur_eq_panel = card_wrap(
         dcc.Graph(figure=eur_eq_fig, config={"displayModeBar": True}),
         padding="0",
@@ -1150,7 +1681,7 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
         })
 
     eur_pos_panel = html.Div([
-        html.Div(f"Positions EUR/USD ouvertes ({len(pos_list or [])})", style={
+        html.Div(f"Positions ouvertes ({len(pos_list or [])})", style={
             "padding": "10px 16px", "fontWeight": "800", "fontSize": "13px",
             "borderBottom": f"1px solid {C_BORDER}",
         }),
@@ -1199,7 +1730,7 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
         })
 
     eur_trades_panel = html.Div([
-        html.Div(f"Historique trades EUR/USD ({len(trades or [])})", style={
+        html.Div(f"Historique trades ({len(trades or [])})", style={
             "padding": "10px 16px", "fontWeight": "800", "fontSize": "13px",
             "borderBottom": f"1px solid {C_BORDER}",
         }),
@@ -1820,7 +2351,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
                 html.Div("EUR/USD Bot (intraday)", style={"fontWeight": "700", "color": C_ACCENT, "marginBottom": "6px"}),
                 html.Div(f"Capital : ${float(port.get('total_equity', 10000)):,.2f}", style={"fontSize": "13px"}),
                 html.Div(f"Positions : {port.get('num_positions', 0)}", style={"fontSize": "13px"}),
-                html.Div(f"Cash : ${float(port.get('cash', 0)):,.2f}", style={"fontSize": "13px"}),
+                html.Div(f"Cash : ${float(port.get('available_cash', port.get('cash', 0))):,.2f}", style={"fontSize": "13px"}),
             ], style={
                 "background": "#ebf8ff", "borderRadius": "10px",
                 "padding": "14px 16px", "flex": "1", "border": f"1px solid {C_ACCENT}20",
@@ -2007,6 +2538,8 @@ def render_tab(tab: str, state: dict, alpaca: dict, groq_live: str | None = None
             return page_eurusd(state)
         if tab == "strategies":
             return page_strategies(state)
+        if tab == "positions":
+            return page_positions(state)
         if tab == "portfolio":
             return page_portfolio(state, alpaca)
         if tab == "regime":

@@ -130,13 +130,13 @@ class MarketUniverseBuilder:
     Construit une MarketUniverse à partir d'un ClientProfile.
 
     Règles MVP :
-      - Max 5 actifs primaires (scalable plus tard)
+      - Max 30 actifs primaires
       - Ajoute VIX, TLT, SPY automatiquement si l'utilisateur a des équités
       - Ajoute GLD si profil conservateur ou high_volatility
       - Ajoute DXY si l'utilisateur a du forex
     """
 
-    MAX_PRIMARY = 5  # MVP : max 5 actifs primaires
+    MAX_PRIMARY = 30
 
     def build(
         self,
@@ -213,8 +213,21 @@ class MarketUniverseBuilder:
     # ------------------------------------------------------------------ #
 
     def _default_tickers(self, profile: ClientProfile) -> list[str]:
-        """Tickers par défaut selon objectif et préférences."""
-        # Forex-only mode: return major FX pairs instead of equities
+        """Tickers par défaut — lit d'abord settings.yaml, sinon fallback profil."""
+        # Essaie de lire depuis settings.yaml (universe.swing + long_term)
+        try:
+            from config.loader import get_settings
+            s = get_settings()
+            universe_cfg = s.get("universe", {})
+            swing   = universe_cfg.get("swing", [])
+            lt      = universe_cfg.get("long_term", [])
+            combined = list(dict.fromkeys(lt + swing))  # long_term first, then swing
+            if combined:
+                return combined
+        except Exception:
+            pass
+
+        # Fallback si settings non disponibles
         if (
             getattr(profile.preferences, "forex", False)
             and not profile.preferences.etf
@@ -223,7 +236,8 @@ class MarketUniverseBuilder:
             return ["EURUSD=X"]
 
         if profile.objective == Objective.GROWTH:
-            return ["SPY", "QQQ", "NVDA", "MSFT", "AAPL"]
+            return ["SPY", "QQQ", "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL",
+                    "META", "AMD", "TSLA", "NFLX", "JPM", "XLE"]
         if profile.objective == Objective.INCOME:
             return ["SPY", "TLT", "GLD", "VT", "IWM"]
         if profile.objective == Objective.WEALTH_PRESERVATION:
@@ -236,9 +250,8 @@ class MarketUniverseBuilder:
             return WatchFrequency.INTRADAY if profile.preferences.intraday else WatchFrequency.HOURLY
         if "BTC" in ticker_up or "ETH" in ticker_up:
             return WatchFrequency.HOURLY
-        if ticker_up in ("SPY", "QQQ", "NVDA", "AAPL", "MSFT"):
-            return WatchFrequency.HOURLY
-        return WatchFrequency.DAILY
+        # Tous les actifs equity/etf en HOURLY pour qu'ils soient inclus dans chaque cycle
+        return WatchFrequency.HOURLY
 
     @staticmethod
     def _ticker_class(ticker: str) -> str:

@@ -48,6 +48,7 @@ class IntradayEMACrossStrategy(BaseStrategy):
         atr_tp_mult = cfg.get("atr_multiplier_tp", 2.5)
         min_conf    = cfg.get("min_confidence",  0.55)
         rsi_period  = cfg.get("rsi_period",      14)
+        allow_continuation = cfg.get("allow_continuation", True)
 
         if len(df) < _MIN_BARS:
             return no_trade(self.name, asset, timeframe, self.horizon,
@@ -84,34 +85,47 @@ class IntradayEMACrossStrategy(BaseStrategy):
                 bearish_cross = True
                 break
 
-        if not bullish_cross and not bearish_cross:
+        bullish_continuation = allow_continuation and curr_fast > curr_slow and c >= curr_fast * 0.9998
+        bearish_continuation = allow_continuation and curr_fast < curr_slow and c <= curr_fast * 1.0002
+
+        bullish_setup = bullish_cross or bullish_continuation
+        bearish_setup = bearish_cross or bearish_continuation
+
+        if bullish_setup and bearish_setup:
+            bullish_setup = curr_fast > curr_slow
+            bearish_setup = curr_fast < curr_slow
+
+        if not bullish_setup and not bearish_setup:
             return no_trade(self.name, asset, timeframe, self.horizon,
-                            f"No EMA cross in last {n_look} bars")
+                            f"No EMA cross/continuation in last {n_look} bars")
 
         # RSI filter
-        if bullish_cross and not (38 <= rsi_val <= 72):
+        if bullish_setup and not (38 <= rsi_val <= 72):
             return no_trade(self.name, asset, timeframe, self.horizon,
                             f"RSI={rsi_val:.1f} outside [38,72] for bullish cross")
-        if bearish_cross and not (28 <= rsi_val <= 62):
+        if bearish_setup and not (28 <= rsi_val <= 62):
             return no_trade(self.name, asset, timeframe, self.horizon,
                             f"RSI={rsi_val:.1f} outside [28,62] for bearish cross")
 
         # Price must be on correct side of EMA(fast)
-        if bullish_cross and c < curr_fast * 0.9998:
+        if bullish_setup and c < curr_fast * 0.9998:
             return no_trade(self.name, asset, timeframe, self.horizon,
                             "Price below fast EMA despite bullish cross")
-        if bearish_cross and c > curr_fast * 1.0002:
+        if bearish_setup and c > curr_fast * 1.0002:
             return no_trade(self.name, asset, timeframe, self.horizon,
                             "Price above fast EMA despite bearish cross")
 
         # Confidence scoring
         ema_separation = abs(curr_fast - curr_slow) / curr_slow if curr_slow > 0 else 0
-        score = 0.60  # base for confirmed cross
+        is_cross = bullish_cross if bullish_setup else bearish_cross
+        score = 0.60 if is_cross else 0.50
+        if not is_cross and ema_separation > 0.0002:
+            score += 0.05
         if ema_separation > 0.0005:
             score += 0.10   # clean separation
-        if bullish_cross and 45 <= rsi_val <= 65:
+        if bullish_setup and 45 <= rsi_val <= 65:
             score += 0.15   # ideal RSI zone
-        elif bearish_cross and 35 <= rsi_val <= 55:
+        elif bearish_setup and 35 <= rsi_val <= 55:
             score += 0.15
 
         # Small penalty in high-volatility regimes (choppier for scalping)
@@ -123,8 +137,8 @@ class IntradayEMACrossStrategy(BaseStrategy):
             return no_trade(self.name, asset, timeframe, self.horizon,
                             f"Confidence {score:.2f} below {min_conf}")
 
-        direction   = 1 if bullish_cross else -1
-        signal_type = SignalType.BUY if bullish_cross else SignalType.SELL
+        direction   = 1 if bullish_setup else -1
+        signal_type = SignalType.BUY if bullish_setup else SignalType.SELL
 
         sl = self._atr_stop(c, atr_val, direction, atr_sl_mult)
         tp = self._atr_target(c, atr_val, direction, atr_tp_mult)
@@ -135,6 +149,7 @@ class IntradayEMACrossStrategy(BaseStrategy):
                             f"R:R {rr} below 1.5")
 
         gap_pct = round(ema_separation * 100, 4)
+        mode = "cross" if is_cross else "continuation"
         return Signal(
             strategy_name=self.name,
             asset=asset,
@@ -147,7 +162,7 @@ class IntradayEMACrossStrategy(BaseStrategy):
             risk_reward=rr,
             horizon=self.horizon,
             reason=(
-                f"EMA({ema_fast}/{ema_slow}) {'bull' if bullish_cross else 'bear'} cross; "
+                f"EMA({ema_fast}/{ema_slow}) {'bull' if bullish_setup else 'bear'} {mode}; "
                 f"RSI={rsi_val:.1f}; gap={gap_pct}%; ATR={atr_val:.6f}"
             ),
             metadata={
@@ -157,5 +172,6 @@ class IntradayEMACrossStrategy(BaseStrategy):
                 "rsi":      round(rsi_val, 2),
                 "atr":      round(atr_val, 6),
                 "regime":   regime,
+                "mode":     mode,
             },
         )

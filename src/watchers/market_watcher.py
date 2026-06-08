@@ -228,11 +228,17 @@ class MarketWatcher:
         if not tickers:
             # Even without daily tickers, intraday tickers may still need fetching
             tickers = []
+        
+        # CRITICAL: Always fetch prices for all open positions to keep them updated
+        open_positions = self.broker.get_open_positions()
+        position_tickers = set(p.get("asset") for p in open_positions if p.get("asset"))
+        tickers = list(set(tickers) | position_tickers)  # Union of tickers and position assets
+        
+        if not tickers:
+            logger.warning("No tickers and no open positions — skipping cycle")
+            return None
 
         data_map, intraday_map, vix_series = self._fetch_data(tickers)
-        if not data_map and not intraday_map:
-            logger.error("No data fetched — skipping cycle")
-            return None
 
         # 2. Feature Engine — daily data only (intraday_map has 5min bars, wrong scale)
         if data_map:
@@ -341,6 +347,9 @@ class MarketWatcher:
             current_prices[t] = float(df["close"].iloc[-1])
         self._execute_decisions(decisions, current_prices)
 
+        # Update all open positions with current market prices
+        self.broker.update_prices(current_prices)
+
         # 8. Portfolio Watcher
         watched_state = self.portfolio_watcher.watch(self.broker, current_prices)
 
@@ -442,12 +451,18 @@ class MarketWatcher:
             return ["SPY", "QQQ", "^VIX"]
 
         from src.watchers.universe_builder import WatchFrequency
+        # Filter out _5M placeholder tickers (universe_builder adds these as markers,
+        # but yfinance doesn't know about "SPY_5M" etc.)
+        intraday = [t for t in self.universe.tickers_for(WatchFrequency.INTRADAY)
+                    if not t.endswith("_5M")]
+        hourly   = self.universe.tickers_for(WatchFrequency.HOURLY)
+        daily    = self.universe.tickers_for(WatchFrequency.DAILY)
         if cycle_type == "intraday":
-            return self.universe.tickers_for(WatchFrequency.INTRADAY) or self.universe.primary_tickers
+            # Always include equity (hourly) tickers so swing strategies have data
+            combined = list(dict.fromkeys(intraday + hourly))
+            return combined or self.universe.primary_tickers
         if cycle_type in ("hourly", "daily"):
-            hourly = self.universe.tickers_for(WatchFrequency.HOURLY)
-            daily  = self.universe.tickers_for(WatchFrequency.DAILY)
-            tickers = list(dict.fromkeys(hourly + daily))  # dédupliqué, ordre préservé
+            tickers = list(dict.fromkeys(hourly + daily))
             return tickers or self.universe.all_tickers
         return self.universe.all_tickers
 
@@ -456,7 +471,8 @@ class MarketWatcher:
         if self.universe is None:
             return []
         from src.watchers.universe_builder import WatchFrequency
-        return self.universe.tickers_for(WatchFrequency.INTRADAY)
+        return [t for t in self.universe.tickers_for(WatchFrequency.INTRADAY)
+                if not t.endswith("_5M")]
 
     def _fetch_data(
         self,
@@ -548,6 +564,73 @@ class MarketWatcher:
     # Exécution
     # ------------------------------------------------------------------ #
 
+    def _execution_size_with_current_budget(
+        self,
+        signal,
+        requested_size_usd: float,
+        current_price: float,
+    ) -> tuple[float, float, str]:
+        """Cap an approved decision against live broker exposure before submitting."""
+        portfolio_state = self.broker.get_portfolio_state()
+        risk = getattr(self.portfolio_watcher, "r", {}) or {}
+        total_capital = float(
+            portfolio_state.get("total_capital")
+            or portfolio_state.get("total_equity")
+            or getattr(self.broker, "initial_capital", 0.0)
+            or 0.0
+        )
+        if total_capital <= 0 or current_price <= 0:
+            return 0.0, 0.0, "invalid capital or price"
+
+        total_exposure = float(portfolio_state.get("total_exposure", 0.0) or 0.0)
+        asset_exposure = portfolio_state.get("asset_exposure", {}) or {}
+        horizon_exposure = portfolio_state.get("horizon_exposure", {}) or {}
+
+        horizon_key = signal.horizon.value
+        horizon_caps = {
+            "intraday": risk.get("max_intraday_allocation_pct", 0.10),
+            "swing": risk.get("max_swing_allocation_pct", 0.60),
+            "long_term": risk.get("max_long_term_allocation_pct", 0.90),
+        }
+
+        total_available = total_capital * risk.get("max_total_exposure_pct", 0.80) - total_exposure
+        asset_available = (
+            total_capital * risk.get("max_exposure_per_asset_pct", 0.30)
+            - float(asset_exposure.get(signal.asset, 0.0) or 0.0)
+        )
+        horizon_available = (
+            total_capital * horizon_caps.get(horizon_key, 0.20)
+            - float(horizon_exposure.get(horizon_key, 0.0) or 0.0)
+        )
+        allowed_size = min(requested_size_usd, total_available, asset_available, horizon_available)
+
+        if allowed_size <= 0:
+            return 0.0, 0.0, (
+                "execution budget exhausted "
+                f"(total={total_available:.2f}, asset={asset_available:.2f}, horizon={horizon_available:.2f})"
+            )
+
+        risk_manager = getattr(self.engine, "risk_manager", None)
+        sizing = getattr(risk_manager, "ps", {}) if risk_manager is not None else {}
+        min_size = float(
+            sizing.get(
+                "min_position_usd",
+                self.cfg.get("broker", {}).get("paper", {}).get("min_position_usd", 0.0),
+            )
+            or 0.0
+        )
+        if allowed_size < min_size:
+            return 0.0, 0.0, f"execution size ${allowed_size:.2f} below minimum ${min_size:.2f}"
+
+        return allowed_size, allowed_size / current_price, "ok"
+
+    @staticmethod
+    def _is_execution_asset(asset: str) -> bool:
+        """Skip macro/index symbols used for analysis only."""
+        if asset.startswith("^"):
+            return False
+        return asset not in {"DX-Y.NYB"}
+
     def _execute_decisions(self, decisions: list, current_prices: dict) -> None:
         """Exécute les décisions approuvées via le broker."""
         try:
@@ -557,17 +640,33 @@ class MarketWatcher:
 
         self.broker.fill_pending_orders(current_prices)
         self.broker.check_stops_and_targets(current_prices)
+        submitted_orders = 0
 
         for dec in decisions:
             if dec.final_action != "EXECUTE":
                 continue
             signal = dec.signal
+            if not self._is_execution_asset(signal.asset):
+                logger.info("Skipping execution for non-tradable analysis asset: %s", signal.asset)
+                continue
+            if signal.asset not in current_prices:
+                logger.warning("Skipping execution for %s: no current price.", signal.asset)
+                continue
             side = OrderSide.BUY if signal.signal.value == "BUY" else OrderSide.SELL
-            shares = dec.risk_verdict.approved_shares
+            current_price = float(current_prices[signal.asset])
+            size_usd, shares, budget_reason = self._execution_size_with_current_budget(
+                signal,
+                float(dec.risk_verdict.approved_size_usd or 0.0),
+                current_price,
+            )
             if shares <= 0:
+                logger.info(
+                    "Skipping execution for %s %s: %s",
+                    signal.asset, signal.signal.value, budget_reason,
+                )
                 continue
 
-            self.broker.submit_market_order(
+            order = self.broker.submit_market_order(
                 asset=signal.asset,
                 side=side,
                 quantity=shares,
@@ -577,14 +676,24 @@ class MarketWatcher:
                 take_profit=signal.take_profit,
             )
             self.broker.fill_pending_orders(current_prices)
+            submitted_orders += 1
 
             self.alerts.trade_executed(
                 asset=signal.asset,
                 side=side.value,
                 size=shares,
-                price=signal.entry_price or 0.0,
+                price=order.filled_price or signal.entry_price or 0.0,
                 strategy=signal.strategy_name,
             )
+
+        if hasattr(self.broker, "save_state"):
+            try:
+                self.broker.save_state()
+            except Exception as exc:
+                logger.warning("Broker state save failed after execution: %s", exc)
+
+        if submitted_orders:
+            logger.info("Execution: %d paper order(s) submitted.", submitted_orders)
 
     def _write_dashboard_state(
         self,
@@ -690,6 +799,9 @@ class MarketWatcher:
                     "initial_capital":  self.broker.initial_capital,
                     "total_equity":     portfolio_state.get("total_equity", self.broker.initial_capital),
                     "cash":             portfolio_state.get("cash", 0),
+                    "available_cash":   portfolio_state.get("available_cash", portfolio_state.get("cash", 0)),
+                    "restricted_short_proceeds": portfolio_state.get("restricted_short_proceeds", 0),
+                    "total_exposure":   portfolio_state.get("total_exposure", 0),
                     "open_pnl":         portfolio_state.get("unrealized_pnl", 0),
                     "realized_pnl":     portfolio_state.get("realized_pnl", 0),
                     "total_pnl":        portfolio_state.get("unrealized_pnl", 0) + portfolio_state.get("realized_pnl", 0),
@@ -717,8 +829,11 @@ class MarketWatcher:
                 },
             }
 
-            with open(out_dir / "bot_state.json", "w", encoding="utf-8") as fh:
+            tmp_path = out_dir / "bot_state.json.tmp"
+            final_path = out_dir / "bot_state.json"
+            with open(tmp_path, "w", encoding="utf-8") as fh:
                 json.dump(doc, fh, indent=2, default=str)
+            tmp_path.replace(final_path)
 
         except Exception as exc:
             logger.warning("Dashboard state write failed: %s", exc)

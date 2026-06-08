@@ -152,6 +152,8 @@ def run_paper_loop() -> None:
         commission_flat=broker_cfg.get("commission_per_trade", 0.0),
         slippage_pct=broker_cfg.get("slippage_pct", 0.001),
     )
+    # Restore previous paper session if available
+    broker.load_state()
 
     # --- Composants ---
     ai_layer    = AIAdvisoryLayer(ai_cfg) if ai_cfg.get("enabled") else None
@@ -201,10 +203,11 @@ def run_paper_loop() -> None:
                     f"{state.vix:.1f}" if state.vix else "N/A",
                     watcher.cycle_count,
                 )
-            # Rapport journalier
+            # Rapport journalier + sauvegarde de l'état
             ps = broker.get_portfolio_state()
             daily = reporter.generate(ps, broker.get_trade_history(), [], state.regime if state else "unknown")
             audit.log_decision({"type": "heartbeat", "portfolio": ps, "regime": state.to_dict() if state else {}})
+            broker.save_state()  # persist positions every minute
 
     except KeyboardInterrupt:
         log.info("Bot stopped by user.")

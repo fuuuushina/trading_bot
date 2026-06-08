@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from types import SimpleNamespace
 
 from src.features.indicators import (
     atr,
@@ -21,7 +22,7 @@ from src.features.indicators import (
     compute_all_features,
 )
 from src.features.regime_detector import MarketRegime, MarketRegimeDetector
-from src.strategies.base import Horizon, SignalType, no_trade
+from src.strategies.base import Horizon, Signal, SignalType, no_trade
 from src.strategies.trend_following import TrendFollowingStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.breakout import BreakoutStrategy
@@ -413,6 +414,16 @@ class TestRiskManager:
         verdict = self.rm.evaluate(signal, PORTFOLIO_STATE, [], rules_approved=False)
         assert verdict.decision == RiskDecision.BLOCK
 
+    def test_blocks_when_allocation_cap_leaves_zero_size(self):
+        signal = make_buy_signal()
+        state = {
+            **PORTFOLIO_STATE,
+            "horizon_exposure": {"swing": 20_000.0},
+        }
+        verdict = self.rm.evaluate(signal, state, [], rules_approved=True)
+        assert verdict.decision == RiskDecision.BLOCK
+        assert verdict.approved_shares == 0.0
+
     def test_blocks_at_max_positions(self):
         state = {**PORTFOLIO_STATE, "open_positions": 15}
         signal = make_buy_signal()
@@ -505,6 +516,48 @@ class TestRulesEngine:
         verdict = self.engine.evaluate(signal, df, "bull_trend", PORTFOLIO_STATE, [], [])
         assert isinstance(verdict.summary, str)
 
+    def test_aggregated_signal_uses_contributor_for_regime_rule(self):
+        signal = Signal(
+            strategy_name="aggregated",
+            asset="AAPL",
+            timeframe="1d",
+            signal=SignalType.BUY,
+            confidence=0.75,
+            entry_price=150.0,
+            stop_loss=145.0,
+            take_profit=165.0,
+            risk_reward=3.0,
+            horizon=Horizon.SWING,
+            reason="Aggregated test signal",
+            metadata={
+                "aggregated": True,
+                "contributors": [{"strategy": "trend_following", "signal": "BUY"}],
+            },
+        )
+        df = make_ohlcv(250)
+        verdict = self.engine.evaluate(signal, df, "bull_trend", PORTFOLIO_STATE, [], [])
+        blocking_names = {rule.rule_name for rule in verdict.blocking_rules}
+        assert "regime_compatible" not in blocking_names
+
+    def test_forex_zero_volume_does_not_block_liquidity(self):
+        signal = Signal(
+            strategy_name="intraday_ema_cross",
+            asset="EURUSD=X",
+            timeframe="5m",
+            signal=SignalType.SELL,
+            confidence=0.70,
+            entry_price=1.10,
+            stop_loss=1.11,
+            take_profit=1.08,
+            risk_reward=2.0,
+            horizon=Horizon.INTRADAY,
+            reason="Forex test signal",
+        )
+        df = make_ohlcv(80)
+        df["volume"] = 0.0
+        result = self.engine.stat.check_liquidity(df, signal)
+        assert result.passed
+
 
 # ---------------------------------------------------------------------------
 # Paper Broker tests
@@ -561,3 +614,74 @@ class TestPaperBroker:
         from src.execution.paper_broker import OrderStatus
         orders = small_broker.get_order_history()
         assert any(o["status"] == OrderStatus.REJECTED.value for o in orders)
+
+    def test_sell_opens_short_position(self):
+        self.broker.submit_market_order("SPY", self.OrderSide.SELL, 10, "test", "intraday")
+        self.broker.fill_pending_orders({"SPY": 100.0})
+        positions = self.broker.get_open_positions()
+        assert len(positions) == 1
+        assert positions[0]["side"] == "short"
+        assert self.broker.get_portfolio_state()["cash"] > 100_000.0
+
+    def test_buy_closes_short_position(self):
+        self.broker.submit_market_order("SPY", self.OrderSide.SELL, 10, "test", "intraday")
+        self.broker.fill_pending_orders({"SPY": 100.0})
+        self.broker.submit_market_order("SPY", self.OrderSide.BUY, 10, "test", "intraday")
+        self.broker.fill_pending_orders({"SPY": 90.0})
+        assert self.broker.get_portfolio_state()["open_positions"] == 0
+        assert self.broker.get_trade_history()[0]["pnl"] > 0
+
+    def test_short_proceeds_are_not_available_cash(self):
+        self.broker.submit_market_order("SPY", self.OrderSide.SELL, 10, "test", "intraday")
+        self.broker.fill_pending_orders({"SPY": 100.0})
+        state = self.broker.get_portfolio_state()
+        assert state["cash"] > 100_000.0
+        assert state["available_cash"] == pytest.approx(100_000.0 - self.broker.commission_flat)
+
+
+class TestMarketWatcherExecutionBudget:
+
+    def _watcher(self):
+        from src.execution.paper_broker import PaperBroker
+        from src.watchers.market_watcher import MarketWatcher
+
+        watcher = MarketWatcher.__new__(MarketWatcher)
+        watcher.broker = PaperBroker(initial_capital=2_000.0, commission_flat=0.0, slippage_pct=0.0)
+        watcher.portfolio_watcher = SimpleNamespace(r={
+            "max_total_exposure_pct": 0.80,
+            "max_exposure_per_asset_pct": 0.30,
+            "max_intraday_allocation_pct": 0.10,
+            "max_swing_allocation_pct": 0.60,
+            "max_long_term_allocation_pct": 0.90,
+        })
+        watcher.engine = SimpleNamespace(risk_manager=RiskManager({
+            "risk": {},
+            "kill_switch": {},
+            "defensive_mode": {},
+            "position_sizing": {"min_position_usd": 20.0},
+        }))
+        watcher.cfg = {"broker": {"paper": {"min_position_usd": 20.0}}}
+        return watcher
+
+    def test_execution_budget_blocks_after_horizon_cap(self):
+        from src.execution.paper_broker import OrderSide
+
+        watcher = self._watcher()
+        watcher.broker.submit_market_order("AAA", OrderSide.BUY, 6, "test", "swing")
+        watcher.broker.fill_pending_orders({"AAA": 100.0})
+        watcher.broker.submit_market_order("BBB", OrderSide.BUY, 6, "test", "swing")
+        watcher.broker.fill_pending_orders({"BBB": 100.0})
+
+        signal = make_buy_signal()
+        signal.asset = "CCC"
+        size, shares, reason = watcher._execution_size_with_current_budget(signal, 600.0, 100.0)
+
+        assert size == 0.0
+        assert shares == 0.0
+        assert "budget exhausted" in reason
+
+    def test_macro_symbols_are_not_executable(self):
+        watcher = self._watcher()
+        assert not watcher._is_execution_asset("^GSPC")
+        assert not watcher._is_execution_asset("DX-Y.NYB")
+        assert watcher._is_execution_asset("SPY")

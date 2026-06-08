@@ -31,8 +31,8 @@ strategies:
     ema_fast: 20
     ema_slow: 50
     ema_trend: 200
-    min_adx: 25                   # Confirm trend, not just drift
-    min_confidence: 0.60          # EMA stack (0.55) + some ADX required
+    min_adx: 10                   # Tres bas pour paper testing
+    min_confidence: 0.35
     atr_multiplier_sl: 2.0
     atr_multiplier_tp: 3.5
 
@@ -42,8 +42,8 @@ strategies:
     horizon: "swing"
     timeframe: "1d"
     lookback_period: 20           # N-day high/low for breakout level
-    min_atr_pct: 0.005            # Avoid low-vol traps
-    min_confidence: 0.70          # Requires breakout + EMA200 alignment
+    min_atr_pct: 0.002            # Lowered further
+    min_confidence: 0.45          # Lowered for paper testing
     atr_multiplier_sl: 1.5
     atr_multiplier_tp: 3.0
 
@@ -52,10 +52,10 @@ strategies:
     enabled: true
     horizon: "swing"
     timeframe: "1d"
-    rsi2_entry_threshold: 15.0    # RSI(2) < 15 = oversold (~3× plus de signaux que <10)
-    rsi2_strong_threshold: 8.0    # RSI(2) < 8 = dip fort (confiance plus haute)
+    rsi2_entry_threshold: 50.0    # RSI(2) < 50 = oversold (paper mode agressif)
+    rsi2_strong_threshold: 25.0   # RSI(2) < 25 = dip fort
     position_size_pct: 0.25       # 25% du capital par trade (fixed_allocation)
-    min_confidence: 0.65
+    min_confidence: 0.35
     atr_multiplier_sl: 1.5
     atr_multiplier_tp: 2.5
 
@@ -103,12 +103,33 @@ strategies:
     enabled: true
     horizon: "swing"
     timeframe: "1d"
-    min_theme_score: 0.35          # Minimum |score| to act (0 = neutral, 1 = max conviction)
-    min_confidence: 0.50
+    min_theme_score: 0.25          # Lowered — act on weaker sector signals too
+    min_confidence: 0.40
     atr_sl_multiplier: 2.0
     atr_tp_multiplier: 3.5
     rsi_max_buy: 72                # Don't chase overbought entries
     rsi_min_sell: 30               # Don't short oversold stocks
+
+  # ---- EMA Cross Swing (Agressive — croisement EMA9/EMA21 daily) ----
+  ema_cross_swing:
+    enabled: true
+    horizon: "swing"
+    timeframe: "1d"
+    ema_fast: 9
+    ema_slow: 21
+    min_confidence: 0.35
+    atr_sl_multiplier: 2.0
+    atr_tp_multiplier: 3.0
+
+  # ---- Momentum Burst (Agressive — momentum 5j + prix > EMA20) ----
+  momentum_burst:
+    enabled: true
+    horizon: "swing"
+    timeframe: "1d"
+    min_return_5d: 0.002             # +0.2% sur 5 jours minimum
+    min_confidence: 0.35
+    atr_sl_multiplier: 1.8
+    atr_tp_multiplier: 2.8
 
   # ---- Intraday Forex Strategies (EUR/USD 5min) ----
   intraday_ema_cross:
@@ -117,6 +138,7 @@ strategies:
     timeframe: "5m"
     ema_fast: 9
     ema_slow: 21
+    allow_continuation: true
     rsi_period: 14
     min_confidence: 0.55
     atr_multiplier_sl: 1.5
@@ -151,45 +173,44 @@ strategies:
 # ema_cross active in all regimes except panic
 
 regime_strategy_map:
-  # Fallback quand le régime est ambigu — stratégies défensives seulement
   unknown:
-    long_term: []
-    swing: []
+    long_term: ["true_dca"]
+    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "rsi_dip_buyer"]
     intraday: ["intraday_ema_cross", "intraday_bollinger_rsi"]
 
   bull_trend:
     long_term: ["true_dca"]
-    swing: ["thematic_momentum", "trend_following", "breakout", "rsi_dip_buyer"]
+    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "breakout", "rsi_dip_buyer"]
     intraday: ["intraday_ema_cross", "intraday_session_breakout"]
   bear_trend:
     long_term: ["true_dca"]
-    swing: ["thematic_momentum"]
+    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "rsi_dip_buyer"]
     intraday: ["intraday_ema_cross", "intraday_session_breakout"]
   range:
     long_term: ["true_dca"]
-    swing: ["thematic_momentum", "rsi_dip_buyer"]
+    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "rsi_dip_buyer"]
     intraday: ["intraday_bollinger_rsi", "intraday_ema_cross"]
   high_volatility:
     long_term: ["true_dca"]
-    swing: ["rsi_dip_buyer"]
+    swing: ["ema_cross_swing", "momentum_burst", "rsi_dip_buyer"]
     intraday: ["intraday_ema_cross"]
   low_volatility:
     long_term: ["true_dca"]
-    swing: ["thematic_momentum", "trend_following"]
+    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following"]
     intraday: ["intraday_bollinger_rsi", "intraday_ema_cross"]
   panic:
     long_term: ["true_dca"]
-    swing: []
-    intraday: []    # no intraday in panic — too risky
+    swing: ["rsi_dip_buyer"]         # dip buyer only in panic — contrarian
+    intraday: []
   euphoric:
     long_term: ["true_dca"]
-    swing: []
+    swing: ["ema_cross_swing", "momentum_burst"]
     intraday: ["intraday_ema_cross"]
   compression:
     long_term: ["true_dca"]
-    swing: []
+    swing: ["ema_cross_swing", "momentum_burst"]
     intraday: ["intraday_bollinger_rsi", "intraday_session_breakout"]
   breakout_expansion:
     long_term: ["true_dca"]
-    swing: ["breakout", "trend_following"]
+    swing: ["ema_cross_swing", "momentum_burst", "breakout", "trend_following"]
     intraday: ["intraday_session_breakout", "intraday_ema_cross"]

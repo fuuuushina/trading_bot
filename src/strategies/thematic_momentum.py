@@ -95,6 +95,11 @@ class ThematicMomentumStrategy(BaseStrategy):
             return no_trade(self.name, asset, timeframe, self.horizon,
                             "Asset not in any tracked sector")
 
+        # If no theme scores loaded yet (Groq unavailable / first cycle), use a
+        # mild default positive score so technical filters can still fire.
+        if not self._theme_scores:
+            theme_score = 0.30
+
         if abs(theme_score) < min_theme:
             return no_trade(self.name, asset, timeframe, self.horizon,
                             f"Theme score {theme_score:+.2f} below ±{min_theme}")
@@ -114,10 +119,10 @@ class ThematicMomentumStrategy(BaseStrategy):
             return no_trade(self.name, asset, timeframe, self.horizon, "Indicator NaN")
 
         if theme_score > 0:
-            # BUY: price above EMA20, RSI not overbought
-            if price < curr_e20 * 0.998:
+            # BUY: price within 4% of EMA20 (allows entries slightly below EMA in corrections)
+            if price < curr_e20 * 0.96:
                 return no_trade(self.name, asset, timeframe, self.horizon,
-                                f"Price {price:.2f} below EMA20 {curr_e20:.2f}")
+                                f"Price {price:.2f} more than 4% below EMA20 {curr_e20:.2f}")
             if curr_e20 < curr_e50 and regime not in ("range", "compression", "unknown"):
                 return no_trade(self.name, asset, timeframe, self.horizon,
                                 "EMA20 below EMA50 — uptrend not confirmed")

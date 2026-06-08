@@ -116,7 +116,6 @@ class RiskManager:
 
         if not rules_approved:
             self._consecutive_blocked += 1
-            self._check_consecutive_blocked()
             return RiskVerdict(
                 RiskDecision.BLOCK, 0.0, 0.0,
                 "Rules Engine rejected — Risk Manager not evaluating.",
@@ -185,11 +184,35 @@ class RiskManager:
         )
         reduced = reduced or reduced_alloc
 
+        if size_usd <= 0:
+            self._consecutive_blocked += 1
+            return RiskVerdict(
+                RiskDecision.BLOCK, 0.0, 0.0,
+                "Allocation cap leaves no available budget for this horizon.",
+                {"consecutive_blocked": self._consecutive_blocked},
+            )
+
+        if size_usd < min_pos_usd:
+            self._consecutive_blocked += 1
+            return RiskVerdict(
+                RiskDecision.BLOCK, 0.0, 0.0,
+                f"Allocation-adjusted size ${size_usd:.2f} below minimum ${min_pos_usd:.2f}.",
+                {"consecutive_blocked": self._consecutive_blocked},
+            )
+
         shares = (
             size_usd / signal.entry_price
             if signal.entry_price and signal.entry_price > 0
             else 0.0
         )
+
+        if shares <= 0:
+            self._consecutive_blocked += 1
+            return RiskVerdict(
+                RiskDecision.BLOCK, 0.0, 0.0,
+                "Cannot size trade because entry price is missing or invalid.",
+                {"consecutive_blocked": self._consecutive_blocked},
+            )
 
         self._consecutive_blocked = 0
         decision = RiskDecision.REDUCE_SIZE if reduced else RiskDecision.APPROVE

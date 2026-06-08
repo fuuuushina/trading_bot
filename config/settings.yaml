@@ -40,6 +40,18 @@ universe:
     - "META"
     - "JPM"
     - "XLE"
+    - "AMD"
+    - "TSLA"
+    - "NFLX"
+    - "CRM"
+    - "BABA"
+    - "COIN"
+    - "MSTR"
+    - "PLTR"
+    - "ARM"
+    - "SMCI"
+    - "SPY"
+    - "QQQ"
   intraday:
     - "EURUSD=X"    # EUR/USD forex — fetched at 5min via yfinance
   # Equity intraday (disabled for MVP forex mode — re-enable when needed)
@@ -137,7 +149,7 @@ market_analyst:
 
 # ---- Signal Aggregator ----
 signal_aggregator:
-  min_confidence: 0.45        # Confidence minimale pour transmettre un signal agrégé
+  min_confidence: 0.30        # Confidence minimale pour transmettre un signal agrégé
 
 # ---- News Layer ----
 news:

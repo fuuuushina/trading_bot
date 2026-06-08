@@ -48,16 +48,14 @@ class RSIDipBuyerStrategy(BaseStrategy):
         close = df["close"]
         price = float(close.iloc[-1])
 
-        # ── Primary trend filter: only long above SMA(200) ──────────────────
+        # ── Trend filter: below SMA200 = downtrend, but allow if extreme dip ──
         sma200 = float(close.rolling(200).mean().iloc[-1])
-        if pd.isna(sma200) or price < sma200:
-            return no_trade(self.name, asset, "1d", self.horizon,
-                            f"Price {price:.2f} below SMA200 {sma200:.2f}. No longs in downtrend.")
+        below_sma200 = not pd.isna(sma200) and price < sma200
 
-        # ── Skip hard bear regimes ───────────────────────────────────────────
-        if regime in ("bear_trend", "panic"):
+        # Hard block only in panic regime
+        if regime == "panic":
             return no_trade(self.name, asset, "1d", self.horizon,
-                            f"Regime={regime}: avoid mean-reversion counter-trend trades.")
+                            "Regime=panic: no mean-reversion trades.")
 
         # ── RSI(2) — extreme oversold ────────────────────────────────────────
         rsi2 = float(rsi(close, 2).iloc[-1])
@@ -78,6 +76,10 @@ class RSIDipBuyerStrategy(BaseStrategy):
             confidence = 0.70
             trigger = "dip"
 
+        # Penalty if below SMA200 (downtrend — higher risk, lower confidence)
+        if below_sma200:
+            confidence -= 0.15
+
         # Regime fine-tuning
         if regime in ("range", "low_volatility", "compression"):
             confidence = min(0.92, confidence + 0.05)
@@ -94,9 +96,10 @@ class RSIDipBuyerStrategy(BaseStrategy):
         tp    = self._atr_target(entry, atr_val, 1, atr_tp_mult)
         rr    = self._rr_ratio(entry, sl, tp)
 
-        if rr is None or rr < 1.4:
+        min_rr = cfg.get("min_risk_reward", 1.2)
+        if rr is None or rr < min_rr:
             return no_trade(self.name, asset, "1d", self.horizon,
-                            f"R:R {rr} below minimum 1.4.")
+                            f"R:R {rr} below minimum {min_rr}.")
 
         return Signal(
             strategy_name=self.name,

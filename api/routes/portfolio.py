@@ -23,7 +23,7 @@ async def get_portfolio_state(broker=Depends(get_broker)):
         PositionOut(
             asset=p.get("asset", ""),
             quantity=p.get("quantity", 0.0),
-            avg_cost=p.get("avg_cost", 0.0),
+            avg_cost=p.get("avg_entry", 0.0),
             current_price=p.get("current_price"),
             market_value=p.get("market_value"),
             unrealized_pnl=p.get("unrealized_pnl"),

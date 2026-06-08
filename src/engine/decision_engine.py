@@ -39,6 +39,8 @@ from src.strategies.tactical_dca import TacticalDCAStrategy
 from src.strategies.thematic_momentum import ThematicMomentumStrategy
 from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
+from src.strategies.ema_cross_swing import EMACrossSwingStrategy
+from src.strategies.momentum_burst import MomentumBurstStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +114,8 @@ class DecisionEngine:
             "tactical_dca":             TacticalDCAStrategy(scfg.get("tactical_dca", {})),
             "true_dca":                 TrueDCAStrategy(scfg.get("true_dca", {})),
             "thematic_momentum":        ThematicMomentumStrategy(scfg.get("thematic_momentum", {})),
+            "ema_cross_swing":          EMACrossSwingStrategy(scfg.get("ema_cross_swing", {})),
+            "momentum_burst":           MomentumBurstStrategy(scfg.get("momentum_burst", {})),
             # Intraday forex strategies
             "intraday_ema_cross":       IntradayEMACrossStrategy(scfg.get("intraday_ema_cross", {})),
             "intraday_bollinger_rsi":   IntradayBollingerRSIStrategy(scfg.get("intraday_bollinger_rsi", {})),
@@ -191,6 +195,9 @@ class DecisionEngine:
                         continue
 
                     strategy = self._strategies[strategy_name]
+                    # Skip if the strategy is asset-restricted and this asset isn't in its list
+                    if hasattr(strategy, "assets") and strategy.assets and asset not in strategy.assets:
+                        continue
                     try:
                         raw_signal = strategy.generate_signal(df, asset, regime_str)
                     except Exception as exc:
@@ -202,6 +209,11 @@ class DecisionEngine:
 
                     if raw_signal.signal == SignalType.NO_TRADE:
                         logger.debug("NO_TRADE: %s / %s — %s", strategy_name, asset, raw_signal.reason)
+                        self.last_no_trade.append({
+                            "asset": asset,
+                            "strategy": strategy_name,
+                            "reason": raw_signal.reason or "",
+                        })
                         continue
 
                     raw_signals.append(raw_signal)

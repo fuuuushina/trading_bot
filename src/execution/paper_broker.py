@@ -319,15 +319,20 @@ class PaperBroker:
         for asset, pos in self._positions.items():
             if asset in current_prices:
                 pos.current_price = current_prices[asset]
+            # Always update unrealized PnL even if price wasn't fetched this cycle
+            # This forces recalculation based on current stored price
 
     # ------------------------------------------------------------------ #
     # Portfolio state
     # ------------------------------------------------------------------ #
 
     def get_portfolio_state(self) -> dict:
-        total_market_value = sum(p.market_value for p in self._positions.values())
+        long_market_value = sum(p.market_value for p in self._positions.values() if p.side == "long")
+        short_market_value = sum(p.market_value for p in self._positions.values() if p.side == "short")
+        total_market_value = long_market_value + short_market_value
         total_unrealized = sum(p.unrealized_pnl for p in self._positions.values())
-        total_equity = self.cash + total_market_value
+        total_equity = self.cash + long_market_value - short_market_value
+        available_cash = max(0.0, self.cash - short_market_value)
         peak_equity = self.initial_capital  # simplified — track running peak separately
         drawdown_pct = (total_equity - peak_equity) / peak_equity
 
@@ -343,6 +348,8 @@ class PaperBroker:
         return {
             "total_capital": total_equity,
             "cash": round(self.cash, 2),
+            "available_cash": round(available_cash, 2),
+            "restricted_short_proceeds": round(short_market_value, 2),
             "total_market_value": round(total_market_value, 2),
             "total_exposure": round(total_market_value, 2),
             "total_exposure_pct": round(total_market_value / (total_equity + 1e-10), 4),
@@ -365,6 +372,79 @@ class PaperBroker:
         return [o.to_dict() for o in self._order_history]
 
     # ------------------------------------------------------------------ #
+    # Persistence — save / load state to survive restarts
+    # ------------------------------------------------------------------ #
+
+    def save_state(self, path: str = "data/paper_trading/broker_state.json") -> None:
+        """Persist cash, positions and trade history to JSON."""
+        import json
+        from pathlib import Path
+        try:
+            out = Path(path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            state = {
+                "initial_capital": self.initial_capital,
+                "cash":            round(self.cash, 4),
+                "positions": [
+                    {
+                        "asset":         p.asset,
+                        "side":          p.side,
+                        "quantity":      p.quantity,
+                        "avg_entry":     p.avg_entry_price,
+                        "current_price": p.current_price,
+                        "stop_loss":     p.stop_loss,
+                        "take_profit":   p.take_profit,
+                        "strategy":      p.strategy_name,
+                        "horizon":       p.horizon,
+                        "opened_at":     p.opened_at.isoformat(),
+                    }
+                    for p in self._positions.values()
+                ],
+                "trade_history": self._trade_history,
+            }
+            tmp = out.with_suffix(out.suffix + ".tmp")
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(state, fh, indent=2, default=str)
+            tmp.replace(out)
+        except Exception as exc:
+            logger.warning("save_state failed: %s", exc)
+
+    def load_state(self, path: str = "data/paper_trading/broker_state.json") -> bool:
+        """Restore positions and trade history from a previous session. Returns True if loaded."""
+        import json
+        from pathlib import Path
+        try:
+            p = Path(path)
+            if not p.exists():
+                return False
+            data = json.loads(p.read_text(encoding="utf-8"))
+            self.cash = float(data.get("cash", self.initial_capital))
+            self._trade_history = data.get("trade_history", [])
+            self._positions = {}
+            for pos in data.get("positions", []):
+                opened = datetime.fromisoformat(pos["opened_at"]) if pos.get("opened_at") else datetime.utcnow()
+                self._positions[pos["asset"]] = Position(
+                    asset=pos["asset"],
+                    side=pos["side"],
+                    quantity=float(pos["quantity"]),
+                    avg_entry_price=float(pos["avg_entry"]),
+                    current_price=float(pos["current_price"]),
+                    strategy_name=pos.get("strategy", "unknown"),
+                    horizon=pos.get("horizon", "swing"),
+                    stop_loss=pos.get("stop_loss"),
+                    take_profit=pos.get("take_profit"),
+                    opened_at=opened,
+                )
+            logger.info(
+                "Broker state loaded: cash=$%.2f, %d positions, %d trades",
+                self.cash, len(self._positions), len(self._trade_history),
+            )
+            return True
+        except Exception as exc:
+            logger.warning("load_state failed: %s", exc)
+            return False
+
+    # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
 
@@ -375,12 +455,32 @@ class PaperBroker:
         else:
             fill_price = base_price * (1 - self.slippage_pct)
 
-        commission = self.commission_flat + fill_price * order.quantity * self.commission_pct
-        cost = fill_price * order.quantity + (commission if order.side == OrderSide.BUY else -commission)
+        existing = self._positions.get(order.asset)
+        if existing is not None:
+            closes_existing = (
+                (existing.side == "long" and order.side == OrderSide.SELL)
+                or (existing.side == "short" and order.side == OrderSide.BUY)
+            )
+            if closes_existing and order.quantity > existing.quantity:
+                order.metadata["quantity_capped_to_position"] = existing.quantity
+                order.quantity = existing.quantity
 
-        if order.side == OrderSide.BUY and cost > self.cash:
+        commission = self.commission_flat + fill_price * order.quantity * self.commission_pct
+        gross_value = fill_price * order.quantity
+
+        if order.quantity <= 0:
             order.status = OrderStatus.REJECTED
-            order.metadata["rejection_reason"] = f"Insufficient cash: need ${cost:.2f}, have ${self.cash:.2f}"
+            order.metadata["rejection_reason"] = "Order quantity is zero after position cap."
+            self._order_history.append(order)
+            logger.warning("Order rejected (quantity): %s %s", order.order_id, order.asset)
+            return
+
+        if order.side == OrderSide.BUY and gross_value + commission > self.cash:
+            order.status = OrderStatus.REJECTED
+            order.metadata["rejection_reason"] = (
+                f"Insufficient cash: need ${gross_value + commission:.2f}, "
+                f"have ${self.cash:.2f}"
+            )
             self._order_history.append(order)
             logger.warning("Order rejected (cash): %s %s", order.order_id, order.asset)
             return
@@ -394,12 +494,19 @@ class PaperBroker:
 
         self._order_history.append(order)
 
+        existing = self._positions.get(order.asset)
         if order.side == OrderSide.BUY:
-            self.cash -= cost
-            self._open_or_add_position(order, fill_price)
+            self.cash -= gross_value + commission
+            if existing is not None and existing.side == "short":
+                self._reduce_or_close_position(order, fill_price)
+            else:
+                self._open_or_add_position(order, fill_price)
         else:
-            self.cash += fill_price * order.quantity - commission
-            self._reduce_or_close_position(order, fill_price)
+            self.cash += gross_value - commission
+            if existing is not None and existing.side == "long":
+                self._reduce_or_close_position(order, fill_price)
+            else:
+                self._open_or_add_position(order, fill_price)
 
         logger.info(
             "FILL: %s %s %s x%.2f @ %.4f commission=%.2f",
@@ -409,17 +516,25 @@ class PaperBroker:
 
     def _open_or_add_position(self, order: Order, fill_price: float) -> None:
         meta = order.metadata
+        side = "long" if order.side == OrderSide.BUY else "short"
         if order.asset in self._positions:
             pos = self._positions[order.asset]
+            if pos.side != side:
+                logger.warning(
+                    "Refusing to add %s order to existing %s position in %s",
+                    side, pos.side, order.asset,
+                )
+                return
             total_qty = pos.quantity + order.quantity
             pos.avg_entry_price = (
                 pos.avg_entry_price * pos.quantity + fill_price * order.quantity
             ) / total_qty
             pos.quantity = total_qty
+            pos.current_price = fill_price
         else:
             self._positions[order.asset] = Position(
                 asset=order.asset,
-                side="long" if order.side == OrderSide.BUY else "short",
+                side=side,
                 quantity=order.quantity,
                 avg_entry_price=fill_price,
                 current_price=fill_price,
@@ -434,27 +549,31 @@ class PaperBroker:
         if order.asset not in self._positions:
             return
         pos = self._positions[order.asset]
+        closed_qty = min(order.quantity, pos.quantity)
+        if closed_qty <= 0:
+            return
         direction = 1 if pos.side == "long" else -1
-        realized_pnl = direction * (fill_price - pos.avg_entry_price) * order.quantity - order.commission
+        realized_pnl = direction * (fill_price - pos.avg_entry_price) * closed_qty - order.commission
 
         self._trade_history.append({
             "asset": order.asset,
             "strategy": order.strategy_name,
             "horizon": order.horizon,
             "side": pos.side,
-            "quantity": order.quantity,
+            "quantity": closed_qty,
             "entry_price": pos.avg_entry_price,
             "exit_price": fill_price,
             "pnl": round(realized_pnl, 4),
-            "pnl_pct": round(realized_pnl / (pos.avg_entry_price * order.quantity), 4),
+            "pnl_pct": round(realized_pnl / (pos.avg_entry_price * closed_qty), 4),
             "commission": order.commission,
             "closed_at": datetime.utcnow().isoformat(),
         })
 
-        if order.quantity >= pos.quantity:
+        if closed_qty >= pos.quantity:
             del self._positions[order.asset]
         else:
-            pos.quantity -= order.quantity
+            pos.quantity -= closed_qty
+            pos.current_price = fill_price
 
     def _close_position(
         self, asset: str, price: float, reason: str
