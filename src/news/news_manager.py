@@ -119,6 +119,10 @@ class NewsManager:
     def get_impact(self, asset: str) -> Optional[NewsImpact]:
         return self._impacts.get(asset)
 
+    def get_articles(self) -> list:
+        """Return the raw articles from the last refresh (for ThemeAnalyzer)."""
+        return list(self._raw_articles)
+
     @property
     def last_refresh_age_minutes(self) -> float:
         """Ancienneté de la dernière collecte en minutes."""

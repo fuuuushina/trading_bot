@@ -151,6 +151,11 @@ class MarketWatcher:
         self._equity_history: list[dict] = []   # {time, equity}
         self._recent_signals: list[dict] = []   # last 100 signal decisions
 
+        # Thematic analysis state
+        self._theme_analyzer = self._build_theme_analyzer()
+        self._theme_scores: dict = {}      # {sector_key: ThemeScore}
+        self._theme_universe: list[str] = []  # dynamic tickers from top themes
+
         # Threads
         self._stop_event = Event()
         self._thread: Optional[Thread] = None
@@ -266,6 +271,28 @@ class MarketWatcher:
                     self.alerts.news_risk(asset, score, topics)
             # Injection dans le Signal Aggregator
             self.engine.apply_news_risk(news_risk_scores)
+
+        # 4b. Thematic Analysis (every 4h — driven by news articles)
+        if self._theme_analyzer is not None:
+            try:
+                articles = (self.news_manager.get_articles()
+                            if self.news_manager and self.news_manager.enabled else [])
+                self._theme_scores = self._theme_analyzer.analyze(articles)
+                # Update dynamic universe: top scoring tickers
+                from src.analysis.sector_universe import get_tickers_for_themes
+                raw_scores = {k: v.score for k, v in self._theme_scores.items()}
+                self._theme_universe = get_tickers_for_themes(raw_scores)
+                logger.info(
+                    "ThemeAnalyzer: %d sectors scored — top universe: %s",
+                    len(self._theme_scores),
+                    self._theme_universe[:6],
+                )
+                # Sync theme scores into the strategy
+                thematic_strat = self.engine._strategies.get("thematic_momentum")
+                if thematic_strat is not None:
+                    thematic_strat.update_themes(self._theme_scores)
+            except Exception as exc:
+                logger.warning("Theme analysis failed: %s", exc)
 
         # 5. LLM Market Analyst (selon intervalle configuré)
         analysis = None
@@ -397,6 +424,19 @@ class MarketWatcher:
     # Fetch données
     # ------------------------------------------------------------------ #
 
+    def _build_theme_analyzer(self):
+        """Instantiate ThemeAnalyzer with API key from settings."""
+        try:
+            import os
+            from src.analysis.theme_analyzer import ThemeAnalyzer
+            api_key = os.getenv("GROQ_API_KEY", "")
+            llm_cfg = self.cfg.get("market_analyst", {})
+            model   = llm_cfg.get("model", "llama-3.3-70b-versatile")
+            return ThemeAnalyzer(groq_api_key=api_key, model=model)
+        except Exception as exc:
+            logger.warning("ThemeAnalyzer init failed: %s", exc)
+            return None
+
     def _get_tickers(self, cycle_type: str) -> list[str]:
         if self.universe is None:
             return ["SPY", "QQQ", "^VIX"]
@@ -453,6 +493,11 @@ class MarketWatcher:
         # Always include SPY for regime detection when we have intraday tickers
         if intraday_tickers and "SPY" not in daily_tickers:
             daily_tickers.append("SPY")
+
+        # Add dynamic theme universe tickers (deduped)
+        for t in self._theme_universe:
+            if t not in daily_tickers and t not in intraday_tickers:
+                daily_tickers.append(t)
 
         for ticker in daily_tickers:
             try:
@@ -661,6 +706,15 @@ class MarketWatcher:
                 "recent_signals": list(reversed(self._recent_signals[-30:])),
                 "news":           news_list,
                 "eurusd":         eurusd,
+                "themes": {
+                    "last_analysis":       getattr(self._theme_analyzer, "_last_run", 0),
+                    "narrative":           getattr(self._theme_analyzer, "narrative", ""),
+                    "active_universe":     self._theme_universe,
+                    "sectors": {
+                        k: v.to_dict()
+                        for k, v in self._theme_scores.items()
+                    } if self._theme_scores else {},
+                },
             }
 
             with open(out_dir / "bot_state.json", "w", encoding="utf-8") as fh:

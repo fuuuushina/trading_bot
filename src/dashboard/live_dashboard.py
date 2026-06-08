@@ -111,6 +111,7 @@ TABS = [
     ("portfolio",  "Portefeuille"),
     ("regime",     "Regime et IA"),
     ("analyse",    "Analyse Groq"),
+    ("themes",     "Thèmes & Secteurs"),
 ]
 
 # Cache yfinance pour ne pas refetcher a chaque refresh
@@ -1849,6 +1850,153 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
     ])
 
 
+# ── Page Thèmes & Secteurs ────────────────────────────────────────────────────
+
+def page_themes(state: dict) -> html.Div:
+    """Thematic investing tab — sector trend scores from LLM analysis."""
+    themes_data = state.get("themes", {})
+    sectors     = themes_data.get("sectors", {})
+    narrative   = themes_data.get("narrative", "")
+    active_uni  = themes_data.get("active_universe", [])
+    last_ts     = themes_data.get("last_analysis", 0)
+
+    # Header
+    if last_ts:
+        try:
+            from datetime import datetime, timezone
+            age_min = (time.time() - float(last_ts)) / 60
+            ts_label = f"Dernière analyse : il y a {age_min:.0f} min"
+        except Exception:
+            ts_label = ""
+    else:
+        ts_label = "Aucune analyse disponible — le bot doit tourner"
+
+    # ── Narrative box ──────────────────────────────────────────────────────
+    narrative_box = html.Div([
+        section_header("Analyse narrative (IA)", C_PURPLE),
+        html.Div(
+            narrative or "En attente de la première analyse thématique…",
+            style={"fontSize": "13px", "lineHeight": "1.6", "color": C_TEXT,
+                   "whiteSpace": "pre-wrap"},
+        ),
+        html.Div(ts_label, style={"fontSize": "11px", "color": C_MUTED, "marginTop": "8px"}),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+    })
+
+    # ── Score bar chart ────────────────────────────────────────────────────
+    if sectors:
+        sorted_sectors = sorted(sectors.items(), key=lambda x: x[1].get("score", 0), reverse=True)
+        labels = [v.get("label", k) for k, v in sorted_sectors]
+        scores = [v.get("score", 0.0) for _, v in sorted_sectors]
+        bar_colors = [
+            C_GREEN if s > 0.3 else (C_RED if s < -0.3 else C_YELLOW)
+            for s in scores
+        ]
+        fig_bar = go.Figure(go.Bar(
+            x=scores, y=labels, orientation="h",
+            marker_color=bar_colors,
+            text=[f"{s:+.2f}" for s in scores],
+            textposition="outside",
+        ))
+        fig_bar.update_layout(
+            margin=dict(l=10, r=60, t=20, b=20),
+            paper_bgcolor="white", plot_bgcolor="white",
+            height=280,
+            xaxis=dict(range=[-1.1, 1.1], zeroline=True,
+                       zerolinecolor=C_BORDER, tickfont=dict(size=11)),
+            yaxis=dict(tickfont=dict(size=12)),
+            font=dict(family="Inter, system-ui", size=11),
+        )
+        chart_section = html.Div([
+            section_header("Score de tendance par secteur", C_ACCENT),
+            dcc.Graph(figure=fig_bar, config={"displayModeBar": False}),
+        ], style={
+            "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+            "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        })
+    else:
+        chart_section = html.Div(
+            "Les scores sectoriels apparaîtront ici après le premier cycle.",
+            style={"color": C_MUTED, "fontSize": "13px", "padding": "20px",
+                   "background": C_PANEL, "borderRadius": "12px",
+                   "border": f"1px solid {C_BORDER}", "marginBottom": "16px"},
+        )
+
+    # ── Sector detail cards ────────────────────────────────────────────────
+    sector_cards = []
+    for k, v in sorted(sectors.items(), key=lambda x: -x[1].get("score", 0)):
+        score   = float(v.get("score", 0))
+        label   = v.get("label", k)
+        reason  = v.get("reason", "")
+        picks   = v.get("top_picks", [])
+        mom     = v.get("momentum", "neutral")
+        count   = v.get("article_count", 0)
+        color   = C_GREEN if score > 0.3 else (C_RED if score < -0.3 else C_MUTED)
+        mom_icon = {"rising": "↑", "falling": "↓", "neutral": "→"}.get(mom, "→")
+
+        card = html.Div([
+            html.Div([
+                html.Span(label, style={"fontWeight": "800", "fontSize": "13px"}),
+                html.Span(
+                    f"{score:+.2f} {mom_icon}",
+                    style={"fontWeight": "900", "fontSize": "15px",
+                           "color": color, "marginLeft": "auto"},
+                ),
+            ], style={"display": "flex", "alignItems": "center", "marginBottom": "8px"}),
+            html.Div(reason, style={"fontSize": "12px", "color": C_TEXT,
+                                    "lineHeight": "1.5", "marginBottom": "8px"}),
+            html.Div([
+                html.Span("Titres suivis : ", style={"fontSize": "11px", "color": C_MUTED}),
+                *[badge(t, C_ACCENT) for t in picks],
+                html.Span(f"  {count} articles", style={"fontSize": "11px",
+                                                          "color": C_MUTED, "marginLeft": "8px"}),
+            ]),
+        ], style={
+            "background": C_PANEL,
+            "border": f"2px solid {color}30",
+            "borderRadius": "10px", "padding": "14px 16px",
+            "boxShadow": "0 1px 3px rgba(0,0,0,.05)",
+        })
+        sector_cards.append(card)
+
+    cards_section = html.Div([
+        section_header("Détail par secteur", C_TEXT),
+        html.Div(sector_cards, style={
+            "display": "grid", "gridTemplateColumns": "1fr 1fr",
+            "gap": "12px",
+        }),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+    }) if sector_cards else html.Div()
+
+    # ── Active universe ────────────────────────────────────────────────────
+    universe_section = html.Div([
+        section_header("Univers actif (titres sélectionnés)", C_GREEN),
+        html.Div(
+            [badge(t, C_GREEN) for t in active_uni] if active_uni
+            else [html.Span("Aucun titre sélectionné", style={"color": C_MUTED, "fontSize": "13px"})],
+            style={"display": "flex", "flexWrap": "wrap", "gap": "8px", "padding": "4px 0"},
+        ),
+        html.Div(
+            f"{len(active_uni)} titres issus des secteurs avec score ≥ 0.35",
+            style={"fontSize": "11px", "color": C_MUTED, "marginTop": "8px"},
+        ),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+    })
+
+    return html.Div([
+        narrative_box,
+        chart_section,
+        universe_section,
+        cards_section,
+    ])
+
+
 # ── Rendu d'un onglet ─────────────────────────────────────────────────────────
 
 def render_tab(tab: str, state: dict, alpaca: dict, groq_live: str | None = None) -> html.Div:
@@ -1865,6 +2013,8 @@ def render_tab(tab: str, state: dict, alpaca: dict, groq_live: str | None = None
             return page_regime(state)
         if tab == "analyse":
             return page_analyse(state, alpaca, groq_live=groq_live)
+        if tab == "themes":
+            return page_themes(state)
     except Exception as exc:
         return html.Div([
             html.Div("Erreur lors du rendu de la page", style={

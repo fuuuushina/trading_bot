@@ -36,6 +36,7 @@ from src.strategies.intraday_session_breakout import IntradaySessionBreakoutStra
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.rsi_dip_buyer import RSIDipBuyerStrategy
 from src.strategies.tactical_dca import TacticalDCAStrategy
+from src.strategies.thematic_momentum import ThematicMomentumStrategy
 from src.strategies.true_dca import TrueDCAStrategy
 from src.strategies.trend_following import TrendFollowingStrategy
 
@@ -110,6 +111,7 @@ class DecisionEngine:
             "rsi_dip_buyer":            RSIDipBuyerStrategy(scfg.get("rsi_dip_buyer", {})),
             "tactical_dca":             TacticalDCAStrategy(scfg.get("tactical_dca", {})),
             "true_dca":                 TrueDCAStrategy(scfg.get("true_dca", {})),
+            "thematic_momentum":        ThematicMomentumStrategy(scfg.get("thematic_momentum", {})),
             # Intraday forex strategies
             "intraday_ema_cross":       IntradayEMACrossStrategy(scfg.get("intraday_ema_cross", {})),
             "intraday_bollinger_rsi":   IntradayBollingerRSIStrategy(scfg.get("intraday_bollinger_rsi", {})),

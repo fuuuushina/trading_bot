@@ -98,6 +98,18 @@ strategies:
     horizon: "intraday"
     timeframe: "5m"
 
+  # ---- Thematic Momentum (Swing — driven by LLM sector analysis) ----
+  thematic_momentum:
+    enabled: true
+    horizon: "swing"
+    timeframe: "1d"
+    min_theme_score: 0.35          # Minimum |score| to act (0 = neutral, 1 = max conviction)
+    min_confidence: 0.50
+    atr_sl_multiplier: 2.0
+    atr_tp_multiplier: 3.5
+    rsi_max_buy: 72                # Don't chase overbought entries
+    rsi_min_sell: 30               # Don't short oversold stocks
+
   # ---- Intraday Forex Strategies (EUR/USD 5min) ----
   intraday_ema_cross:
     enabled: true
@@ -147,15 +159,15 @@ regime_strategy_map:
 
   bull_trend:
     long_term: ["true_dca"]
-    swing: ["trend_following", "breakout", "rsi_dip_buyer"]
+    swing: ["thematic_momentum", "trend_following", "breakout", "rsi_dip_buyer"]
     intraday: ["intraday_ema_cross", "intraday_session_breakout"]
   bear_trend:
     long_term: ["true_dca"]
-    swing: []
+    swing: ["thematic_momentum"]
     intraday: ["intraday_ema_cross", "intraday_session_breakout"]
   range:
     long_term: ["true_dca"]
-    swing: ["rsi_dip_buyer"]
+    swing: ["thematic_momentum", "rsi_dip_buyer"]
     intraday: ["intraday_bollinger_rsi", "intraday_ema_cross"]
   high_volatility:
     long_term: ["true_dca"]
@@ -163,7 +175,7 @@ regime_strategy_map:
     intraday: ["intraday_ema_cross"]
   low_volatility:
     long_term: ["true_dca"]
-    swing: ["trend_following"]
+    swing: ["thematic_momentum", "trend_following"]
     intraday: ["intraday_bollinger_rsi", "intraday_ema_cross"]
   panic:
     long_term: ["true_dca"]

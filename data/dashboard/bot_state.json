@@ -1,7 +1,7 @@
 {
-  "last_update": "2026-06-08T07:06:53",
+  "last_update": "2026-06-08T07:26:46",
   "is_running": true,
-  "cycle_count": 3,
+  "cycle_count": 1,
   "mode": "paper",
   "market": {
     "regime": "range",
@@ -10,18 +10,16 @@
     "source": "rules",
     "risk_level": "medium",
     "risk_fr": "Modere",
-    "vix": null,
-    "trend": "neutral",
-    "exposure": 0.2,
+    "vix": 21.51,
+    "trend": "positive",
+    "exposure": 0.3,
     "analyst_summary": "March\u00e9 en r\u00e9gime de range, exposition limit\u00e9e recommand\u00e9e",
     "key_risks": [
       "Volatilit\u00e9 \u00e9lev\u00e9e",
-      "Correction potentielle du march\u00e9",
-      "Fluctuations des prix des actifs"
+      "Correction du march\u00e9"
     ],
     "opportunities": [
-      "Reprise potentielle du march\u00e9",
-      "Achats de valeur"
+      "Achats s\u00e9lectifs sur les assets sous-\u00e9valu\u00e9s"
     ]
   },
   "portfolio": {
@@ -38,15 +36,7 @@
   },
   "equity_history": [
     {
-      "time": "2026-06-08T06:56:52.329147+00:00",
-      "equity": 2000.0
-    },
-    {
-      "time": "2026-06-08T07:01:52.891420+00:00",
-      "equity": 2000.0
-    },
-    {
-      "time": "2026-06-08T07:06:53.623767+00:00",
+      "time": "2026-06-08T07:26:46.410693+00:00",
       "equity": 2000.0
     }
   ],
@@ -54,7 +44,7 @@
   "recent_trades": [],
   "recent_signals": [
     {
-      "time": "2026-06-08T07:06:53",
+      "time": "2026-06-08T07:26:46",
       "asset": "EURUSD=X",
       "strategy": "intraday_ema_cross",
       "signal": "NO_TRADE",
@@ -63,7 +53,7 @@
       "reason": "No EMA cross in last 5 bars"
     },
     {
-      "time": "2026-06-08T07:06:53",
+      "time": "2026-06-08T07:26:46",
       "asset": "EURUSD=X",
       "strategy": "intraday_bollinger_rsi",
       "signal": "NO_TRADE",
@@ -72,61 +62,7 @@
       "reason": "No BB+RSI condition met"
     },
     {
-      "time": "2026-06-08T07:06:53",
-      "asset": "SPY",
-      "strategy": "aggregated",
-      "signal": "BUY",
-      "confidence": 0.75,
-      "action": "BLOCK",
-      "reason": "[1 bots en accord: rsi_dip_buyer] | RSI(2)=8.1 [dip] while price > SMA200=682. Regime=range."
-    },
-    {
-      "time": "2026-06-08T07:01:52",
-      "asset": "EURUSD=X",
-      "strategy": "intraday_ema_cross",
-      "signal": "NO_TRADE",
-      "confidence": 0.0,
-      "action": "NO_TRADE",
-      "reason": "No EMA cross in last 5 bars"
-    },
-    {
-      "time": "2026-06-08T07:01:52",
-      "asset": "EURUSD=X",
-      "strategy": "intraday_bollinger_rsi",
-      "signal": "NO_TRADE",
-      "confidence": 0.0,
-      "action": "NO_TRADE",
-      "reason": "No BB+RSI condition met"
-    },
-    {
-      "time": "2026-06-08T07:01:52",
-      "asset": "SPY",
-      "strategy": "aggregated",
-      "signal": "BUY",
-      "confidence": 0.75,
-      "action": "BLOCK",
-      "reason": "[1 bots en accord: rsi_dip_buyer] | RSI(2)=8.1 [dip] while price > SMA200=682. Regime=range."
-    },
-    {
-      "time": "2026-06-08T06:56:52",
-      "asset": "EURUSD=X",
-      "strategy": "intraday_ema_cross",
-      "signal": "NO_TRADE",
-      "confidence": 0.0,
-      "action": "NO_TRADE",
-      "reason": "No EMA cross in last 5 bars"
-    },
-    {
-      "time": "2026-06-08T06:56:52",
-      "asset": "EURUSD=X",
-      "strategy": "intraday_bollinger_rsi",
-      "signal": "NO_TRADE",
-      "confidence": 0.0,
-      "action": "NO_TRADE",
-      "reason": "No BB+RSI condition met"
-    },
-    {
-      "time": "2026-06-08T06:56:52",
+      "time": "2026-06-08T07:26:46",
       "asset": "SPY",
       "strategy": "aggregated",
       "signal": "BUY",
@@ -137,60 +73,16 @@
   ],
   "news": [],
   "eurusd": {
-    "price": 1.15194,
-    "change_pct": -0.023,
-    "ema_9": 1.15221,
-    "ema_21": 1.15251,
-    "rsi_14": 39.54,
-    "atr_14": 0.000341,
-    "bb_upper": 1.15337,
-    "bb_middle": 1.15248,
-    "bb_lower": 1.15158,
+    "price": 1.153,
+    "change_pct": 0.0115,
+    "ema_9": 1.15265,
+    "ema_21": 1.15265,
+    "rsi_14": 54.51,
+    "atr_14": 0.00037,
+    "bb_upper": 1.15309,
+    "bb_middle": 1.15243,
+    "bb_lower": 1.15176,
     "ohlcv": [
-      {
-        "t": "2026-06-08 01:30:00+01:00",
-        "o": 1.1526,
-        "h": 1.15274,
-        "l": 1.1526,
-        "c": 1.15274,
-        "e9": 1.1526,
-        "e21": 1.15253,
-        "bbu": 1.15294,
-        "bbl": 1.15186
-      },
-      {
-        "t": "2026-06-08 01:35:00+01:00",
-        "o": 1.15274,
-        "h": 1.153,
-        "l": 1.15274,
-        "c": 1.153,
-        "e9": 1.15268,
-        "e21": 1.15257,
-        "bbu": 1.153,
-        "bbl": 1.15183
-      },
-      {
-        "t": "2026-06-08 01:40:00+01:00",
-        "o": 1.153,
-        "h": 1.15314,
-        "l": 1.153,
-        "c": 1.15314,
-        "e9": 1.15277,
-        "e21": 1.15262,
-        "bbu": 1.15308,
-        "bbl": 1.15188
-      },
-      {
-        "t": "2026-06-08 01:45:00+01:00",
-        "o": 1.15314,
-        "h": 1.1534,
-        "l": 1.15314,
-        "c": 1.1534,
-        "e9": 1.1529,
-        "e21": 1.15269,
-        "bbu": 1.15322,
-        "bbl": 1.15188
-      },
       {
         "t": "2026-06-08 01:50:00+01:00",
         "o": 1.1534,
@@ -1020,13 +912,164 @@
         "t": "2026-06-08 08:05:00+01:00",
         "o": 1.15207,
         "h": 1.15207,
-        "l": 1.15194,
-        "c": 1.15194,
-        "e9": 1.15221,
-        "e21": 1.15251,
+        "l": 1.15181,
+        "c": 1.15207,
+        "e9": 1.15223,
+        "e21": 1.15252,
         "bbu": 1.15337,
-        "bbl": 1.15158
+        "bbl": 1.1516
+      },
+      {
+        "t": "2026-06-08 08:10:00+01:00",
+        "o": 1.15234,
+        "h": 1.15287,
+        "l": 1.15234,
+        "c": 1.15287,
+        "e9": 1.15236,
+        "e21": 1.15255,
+        "bbu": 1.15321,
+        "bbl": 1.15169
+      },
+      {
+        "t": "2026-06-08 08:15:00+01:00",
+        "o": 1.15247,
+        "h": 1.153,
+        "l": 1.15247,
+        "c": 1.153,
+        "e9": 1.15249,
+        "e21": 1.15259,
+        "bbu": 1.15315,
+        "bbl": 1.15173
+      },
+      {
+        "t": "2026-06-08 08:20:00+01:00",
+        "o": 1.15287,
+        "h": 1.153,
+        "l": 1.15274,
+        "c": 1.15287,
+        "e9": 1.15256,
+        "e21": 1.15262,
+        "bbu": 1.15309,
+        "bbl": 1.15176
+      },
+      {
+        "t": "2026-06-08 08:25:00+01:00",
+        "o": 1.153,
+        "h": 1.153,
+        "l": 1.153,
+        "c": 1.153,
+        "e9": 1.15265,
+        "e21": 1.15265,
+        "bbu": 1.15309,
+        "bbl": 1.15176
       }
     ]
+  },
+  "themes": {
+    "last_analysis": 1780903601.5193772,
+    "narrative": "Les secteurs de l'\u00e9nergie et de la d\u00e9fense a\u00e9rospatiale sont les plus affect\u00e9s par les tensions g\u00e9opolitiques et la guerre en Iran, avec des tendances haussi\u00e8res fortes. Les autres secteurs sont plus mitig\u00e9s, avec des impacts n\u00e9gatifs ou neutres en fonction de leur exposition aux facteurs g\u00e9opolitiques et \u00e9conomiques.",
+    "active_universe": [
+      "LMT",
+      "RTX",
+      "NOC",
+      "BA",
+      "XOM",
+      "CVX",
+      "COP",
+      "SLB"
+    ],
+    "sectors": {
+      "pharma_biotech": {
+        "sector": "pharma_biotech",
+        "label": "Pharma & Biotech",
+        "score": 0.2,
+        "momentum": "l\u00e9g\u00e8rement positif",
+        "reason": "Les actualit\u00e9s r\u00e9centes sur les m\u00e9dicaments contre l'ob\u00e9sit\u00e9 de Boehringer-Zealand montrent des promesses, mais l'impact global sur le secteur est limit\u00e9.",
+        "top_picks": [
+          "LLY",
+          "ABBV"
+        ],
+        "article_count": 26
+      },
+      "ai_software": {
+        "sector": "ai_software",
+        "label": "IA & Logiciel",
+        "score": -0.4,
+        "momentum": "l\u00e9g\u00e8rement n\u00e9gatif",
+        "reason": "Les inqui\u00e9tudes sur les co\u00fbts et la demande li\u00e9es \u00e0 la guerre en Iran, ainsi que les pr\u00e9occupations sur les actions des hyperscalers, affectent n\u00e9gativement le secteur.",
+        "top_picks": [
+          "MSFT"
+        ],
+        "article_count": 26
+      },
+      "semiconductors": {
+        "sector": "semiconductors",
+        "label": "Semi-conducteurs",
+        "score": -0.2,
+        "momentum": "l\u00e9g\u00e8rement n\u00e9gatif",
+        "reason": "La guerre en Iran et les tensions g\u00e9opolitiques pourraient affecter la cha\u00eene d'approvisionnement, mais l'annonce de Naver sur la construction de gigawatt-scale AI factories est un signe positif.",
+        "top_picks": [
+          "NVDA"
+        ],
+        "article_count": 26
+      },
+      "energy": {
+        "sector": "energy",
+        "label": "\u00c9nergie",
+        "score": 0.8,
+        "momentum": "tendance haussi\u00e8re forte",
+        "reason": "Les prix du p\u00e9trole augmentent en raison des tensions au Moyen-Orient et des attaques contre les installations p\u00e9trochimiques en Iran.",
+        "top_picks": [
+          "XOM",
+          "CVX"
+        ],
+        "article_count": 26
+      },
+      "fintech_banking": {
+        "sector": "fintech_banking",
+        "label": "Finance & Banque",
+        "score": -0.1,
+        "momentum": "neutre",
+        "reason": "Les tensions g\u00e9opolitiques et la guerre en Iran n'ont pas d'impact direct sur le secteur, mais les pr\u00e9occupations sur l'\u00e9conomie globale pourraient affecter les banques.",
+        "top_picks": [
+          "JPM"
+        ],
+        "article_count": 26
+      },
+      "ev_clean_energy": {
+        "sector": "ev_clean_energy",
+        "label": "VE & \u00c9nergie propre",
+        "score": 0.1,
+        "momentum": "neutre",
+        "reason": "Les prix \u00e9lev\u00e9s du p\u00e9trole pourraient favoriser les \u00e9nergies renouvelables, mais l'impact est limit\u00e9 pour le moment.",
+        "top_picks": [
+          "TSLA"
+        ],
+        "article_count": 26
+      },
+      "defense_aerospace": {
+        "sector": "defense_aerospace",
+        "label": "D\u00e9fense & A\u00e9ro",
+        "score": 0.9,
+        "momentum": "tendance haussi\u00e8re forte",
+        "reason": "La guerre en Iran et les tensions g\u00e9opolitiques augmentent la demande pour les produits de d\u00e9fense et les services a\u00e9rospatiaux.",
+        "top_picks": [
+          "LMT",
+          "RTX"
+        ],
+        "article_count": 26
+      },
+      "retail_consumer": {
+        "sector": "retail_consumer",
+        "label": "Distribution & Conso",
+        "score": -0.3,
+        "momentum": "l\u00e9g\u00e8rement n\u00e9gatif",
+        "reason": "Les tensions g\u00e9opolitiques et la guerre en Iran pourraient affecter la confiance des consommateurs et les d\u00e9penses.",
+        "top_picks": [
+          "AMZN"
+        ],
+        "article_count": 26
+      }
+    }
   }
 }
