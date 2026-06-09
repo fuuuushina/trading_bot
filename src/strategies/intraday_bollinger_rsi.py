@@ -51,8 +51,8 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
         bb_period    = cfg.get("bb_period",        20)
         bb_mult      = cfg.get("bb_mult",          2.0)
         rsi_period   = cfg.get("rsi_period",       14)
-        rsi_ob       = cfg.get("rsi_overbought",   65)
-        rsi_os       = cfg.get("rsi_oversold",     35)
+        rsi_ob       = cfg.get("rsi_overbought",   62)
+        rsi_os       = cfg.get("rsi_oversold",     38)
         atr_sl_mult  = cfg.get("atr_multiplier_sl", 1.5)
         min_conf     = cfg.get("min_confidence",   0.55)
 
@@ -112,7 +112,7 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
                             f"R:R {rr} below 1.2")
 
         # Confidence
-        score = 0.55
+        score = 0.50
         # Deeper into the band = stronger signal
         deviation = abs(c - bas_val) / (up_val - bas_val) if (up_val - bas_val) > 0 else 0
         if deviation > 1.0:    # price beyond 1 std from basis

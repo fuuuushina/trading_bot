@@ -355,14 +355,26 @@ class RiskManager:
         total_capital = portfolio_state.get("total_capital", 1.0)
         total_exposure = portfolio_state.get("total_exposure", 0.0)
         asset_exposure = portfolio_state.get("asset_exposure", {})
+        horizon_exposure = portfolio_state.get("horizon_exposure", {})
 
-        # Total exposure cap
-        max_exp = self.r.get("max_total_exposure_pct", 0.80)
-        if total_exposure / total_capital >= max_exp:
-            return RiskVerdict(
-                RiskDecision.BLOCK, 0.0, 0.0,
-                f"Total exposure {total_exposure/total_capital:.1%} at max {max_exp:.1%}.",
-            )
+        # Intraday signals use their own dedicated budget — don't block them
+        # because of swing/long-term positions filling the global cap.
+        if signal.horizon == Horizon.INTRADAY:
+            intraday_exp = horizon_exposure.get("intraday", 0.0)
+            max_intraday = self.r.get("max_intraday_allocation_pct", 0.30)
+            if intraday_exp / (total_capital + 1e-10) >= max_intraday:
+                return RiskVerdict(
+                    RiskDecision.BLOCK, 0.0, 0.0,
+                    f"Intraday allocation {intraday_exp/total_capital:.1%} at cap {max_intraday:.1%}.",
+                )
+        else:
+            # Total exposure cap for swing / long-term
+            max_exp = self.r.get("max_total_exposure_pct", 0.80)
+            if total_exposure / total_capital >= max_exp:
+                return RiskVerdict(
+                    RiskDecision.BLOCK, 0.0, 0.0,
+                    f"Total exposure {total_exposure/total_capital:.1%} at max {max_exp:.1%}.",
+                )
 
         # Asset cap
         max_asset = self.r.get("max_exposure_per_asset_pct", 0.10)
@@ -438,8 +450,8 @@ class RiskManager:
         reduced = False
 
         caps = {
-            Horizon.INTRADAY: self.r.get("max_intraday_allocation_pct", 0.10),
-            Horizon.SWING: self.r.get("max_swing_allocation_pct", 0.20),
+            Horizon.INTRADAY: self.r.get("max_intraday_allocation_pct", 0.30),
+            Horizon.SWING: self.r.get("max_swing_allocation_pct", 0.50),
             Horizon.LONG_TERM: self.r.get("max_long_term_allocation_pct", 0.90),
         }
 

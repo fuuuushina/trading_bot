@@ -129,6 +129,13 @@ class MarketWatcher:
         self.profile = client_profile
         self.universe = universe
 
+        # TradingOrchestrator — registre des assets multi-instruments
+        from src.engine.trading_orchestrator import TradingOrchestrator
+        assets_cfg   = self._load_assets_cfg()
+        risk_cfg     = cfg.get("risk", {})
+        settings_cfg = cfg
+        self.orchestrator = TradingOrchestrator(assets_cfg, risk_cfg, settings_cfg)
+
         # Fréquences (en secondes) — MVP : tout à 15 min
         watcher_cfg = cfg.get("market_watcher", {})
         self.cycle_intraday_s  = watcher_cfg.get("intraday_interval_seconds", 300)    # 5 min
@@ -331,6 +338,10 @@ class MarketWatcher:
         open_positions = self.broker.get_open_positions()
         trade_history  = self.broker.get_trade_history()
 
+        asset_strategy_map = (
+            self.orchestrator.get_asset_strategy_map()
+            if hasattr(self, 'orchestrator') else {}
+        )
         decisions = self.engine.run_cycle(
             data_map=data_map,
             intraday_data_map=intraday_map,
@@ -338,6 +349,7 @@ class MarketWatcher:
             open_positions=open_positions,
             trade_history=trade_history,
             vix_series=vix_series,
+            asset_strategy_map=asset_strategy_map,
         )
 
         # 7. Exécution des décisions approuvées
@@ -399,19 +411,7 @@ class MarketWatcher:
         if len(self._equity_history) > 2000:
             self._equity_history = self._equity_history[-2000:]
 
-        # Track recent decisions (EXECUTE / BLOCK)
-        for dec in decisions:
-            self._recent_signals.append({
-                "time": state.computed_at[:19],
-                "asset": dec.asset,
-                "strategy": dec.signal.strategy_name,
-                "signal": dec.signal.signal.value,
-                "confidence": round(dec.signal.confidence, 3),
-                "action": dec.final_action,
-                "reason": (dec.signal.reason or "")[:120],
-            })
-
-        # Track NO_TRADE strategy activity so the Strategies tab is never empty
+        # Track NO_TRADE strategy activity first (so EXECUTE/BLOCK always appear at the top)
         for nt in self.engine.last_no_trade:
             self._recent_signals.append({
                 "time": state.computed_at[:19],
@@ -421,6 +421,18 @@ class MarketWatcher:
                 "confidence": 0.0,
                 "action": "NO_TRADE",
                 "reason": nt["reason"][:120],
+            })
+
+        # Track decisions (EXECUTE / BLOCK) LAST — so they appear first in the [-30:] window
+        for dec in decisions:
+            self._recent_signals.append({
+                "time": state.computed_at[:19],
+                "asset": dec.asset,
+                "strategy": dec.signal.strategy_name,
+                "signal": dec.signal.signal.value,
+                "confidence": round(dec.signal.confidence, 3),
+                "action": dec.final_action,
+                "reason": (dec.signal.reason or dec.risk_verdict.reason or "")[:120],
             })
 
         if len(self._recent_signals) > 200:
@@ -446,6 +458,18 @@ class MarketWatcher:
             logger.warning("ThemeAnalyzer init failed: %s", exc)
             return None
 
+    def _load_assets_cfg(self) -> dict:
+        """Charge config/assets.yaml — retourne un dict vide si absent."""
+        import yaml
+        import os
+        path = os.path.join(os.path.dirname(__file__), "../../config/assets.yaml")
+        try:
+            with open(path) as f:
+                return yaml.safe_load(f) or {}
+        except Exception as exc:
+            logger.warning("Could not load assets.yaml: %s", exc)
+            return {}
+
     def _get_tickers(self, cycle_type: str) -> list[str]:
         if self.universe is None:
             return ["SPY", "QQQ", "^VIX"]
@@ -468,11 +492,15 @@ class MarketWatcher:
 
     def _get_intraday_tickers(self) -> list[str]:
         """Returns the list of tickers that should be fetched at 5min resolution."""
-        if self.universe is None:
-            return []
-        from src.watchers.universe_builder import WatchFrequency
-        return [t for t in self.universe.tickers_for(WatchFrequency.INTRADAY)
-                if not t.endswith("_5M")]
+        # Assets from TradingOrchestrator (managed intraday assets)
+        managed = list(self.orchestrator.tradable_assets) if hasattr(self, 'orchestrator') else []
+        # Assets from universe builder (legacy)
+        legacy = []
+        if self.universe is not None:
+            from src.watchers.universe_builder import WatchFrequency
+            legacy = [t for t in self.universe.tickers_for(WatchFrequency.INTRADAY)
+                      if not t.endswith("_5M") and t not in managed]
+        return managed + legacy
 
     def _fetch_data(
         self,
@@ -537,8 +565,11 @@ class MarketWatcher:
         # --- Intraday 5min fetch (EURUSD=X, etc.) ---
         for ticker in intraday_tickers:
             try:
+                interval, period = intraday_interval, intraday_period  # defaults
+                if hasattr(self, 'orchestrator') and self.orchestrator.is_managed_asset(ticker):
+                    interval, period = self.orchestrator.get_data_params(ticker)
                 df = yf.download(
-                    ticker, period=intraday_period, interval=intraday_interval,
+                    ticker, period=period, interval=interval,
                     auto_adjust=True, progress=False
                 )
                 if df.empty or len(df) < 30:
@@ -572,7 +603,9 @@ class MarketWatcher:
     ) -> tuple[float, float, str]:
         """Cap an approved decision against live broker exposure before submitting."""
         portfolio_state = self.broker.get_portfolio_state()
-        risk = getattr(self.portfolio_watcher, "r", {}) or {}
+        # Pull risk params from the engine's risk_manager (authoritative source)
+        risk_manager = getattr(self.engine, "risk_manager", None)
+        risk = getattr(risk_manager, "r", {}) or {}
         total_capital = float(
             portfolio_state.get("total_capital")
             or portfolio_state.get("total_equity")
@@ -588,12 +621,11 @@ class MarketWatcher:
 
         horizon_key = signal.horizon.value
         horizon_caps = {
-            "intraday": risk.get("max_intraday_allocation_pct", 0.10),
+            "intraday": risk.get("max_intraday_allocation_pct", 0.30),
             "swing": risk.get("max_swing_allocation_pct", 0.60),
             "long_term": risk.get("max_long_term_allocation_pct", 0.90),
         }
 
-        total_available = total_capital * risk.get("max_total_exposure_pct", 0.80) - total_exposure
         asset_available = (
             total_capital * risk.get("max_exposure_per_asset_pct", 0.30)
             - float(asset_exposure.get(signal.asset, 0.0) or 0.0)
@@ -602,12 +634,28 @@ class MarketWatcher:
             total_capital * horizon_caps.get(horizon_key, 0.20)
             - float(horizon_exposure.get(horizon_key, 0.0) or 0.0)
         )
-        allowed_size = min(requested_size_usd, total_available, asset_available, horizon_available)
+
+        if horizon_key == "intraday":
+            # Intraday has its own dedicated budget — don't compete with swing/LT positions
+            allowed_size = min(requested_size_usd, horizon_available, asset_available)
+            # Apply orchestrator's per-asset margin cap (e.g. EUR/USD max 25% = $500)
+            if hasattr(self, "orchestrator") and self.orchestrator.is_managed_asset(signal.asset):
+                open_pos = self.broker.get_open_positions()
+                deployed = self.orchestrator.get_deployed_margin(signal.asset, open_pos)
+                orch_avail = self.orchestrator.get_available_margin(signal.asset, total_capital, deployed)
+                allowed_size = min(allowed_size, orch_avail)
+        else:
+            total_available = total_capital * risk.get("max_total_exposure_pct", 0.80) - total_exposure
+            allowed_size = min(requested_size_usd, total_available, asset_available, horizon_available)
 
         if allowed_size <= 0:
+            total_available_safe = (
+                total_capital * risk.get("max_total_exposure_pct", 0.80) - total_exposure
+                if horizon_key != "intraday" else horizon_available
+            )
             return 0.0, 0.0, (
                 "execution budget exhausted "
-                f"(total={total_available:.2f}, asset={asset_available:.2f}, horizon={horizon_available:.2f})"
+                f"(available={total_available_safe:.2f}, asset={asset_available:.2f}, horizon={horizon_available:.2f})"
             )
 
         risk_manager = getattr(self.engine, "risk_manager", None)
@@ -622,7 +670,18 @@ class MarketWatcher:
         if allowed_size < min_size:
             return 0.0, 0.0, f"execution size ${allowed_size:.2f} below minimum ${min_size:.2f}"
 
-        return allowed_size, allowed_size / current_price, "ok"
+        # Apply leverage: margin × leverage / price = quantity
+        # Managed assets use orchestrator leverage; legacy forex uses config fallback.
+        asset_leverage = 1.0
+        if hasattr(self, 'orchestrator') and self.orchestrator.is_managed_asset(signal.asset):
+            asset_leverage = self.orchestrator.get_leverage(signal.asset)
+        elif horizon_key == "intraday" and "=" in signal.asset:
+            asset_leverage = float(
+                self.cfg.get("market_watcher", {}).get("forex_leverage", 1.0)
+            )
+
+        shares = (allowed_size * asset_leverage) / current_price
+        return allowed_size, shares, "ok"
 
     @staticmethod
     def _is_execution_asset(asset: str) -> bool:
@@ -666,6 +725,17 @@ class MarketWatcher:
                 )
                 continue
 
+            # Build order metadata — include leverage for managed and legacy forex assets
+            order_meta: dict = {}
+            if hasattr(self, 'orchestrator') and self.orchestrator.is_managed_asset(signal.asset):
+                lev = self.orchestrator.get_leverage(signal.asset)
+                if lev > 1.0:
+                    order_meta["leverage"] = lev
+            elif signal.horizon.value == "intraday" and "=" in signal.asset:
+                lev = float(self.cfg.get("market_watcher", {}).get("forex_leverage", 1.0))
+                if lev > 1.0:
+                    order_meta["leverage"] = lev
+
             order = self.broker.submit_market_order(
                 asset=signal.asset,
                 side=side,
@@ -674,6 +744,7 @@ class MarketWatcher:
                 horizon=signal.horizon.value,
                 stop_loss=signal.stop_loss,
                 take_profit=signal.take_profit,
+                metadata=order_meta if order_meta else None,
             )
             self.broker.fill_pending_orders(current_prices)
             submitted_orders += 1
@@ -709,6 +780,75 @@ class MarketWatcher:
 
             out_dir = Path("data/dashboard")
             out_dir.mkdir(parents=True, exist_ok=True)
+
+            def _asset_decimals(asset_id: str) -> int:
+                if asset_id.endswith("=X"):
+                    return 5
+                if asset_id in {"BTC-USD", "ETH-USD", "GC=F"}:
+                    return 2
+                return 2
+
+            def _safe_round(value, digits: int):
+                try:
+                    value = float(value)
+                    return round(value, digits) if value == value else None
+                except Exception:
+                    return None
+
+            def _dashboard_live_snapshot(asset_id: str, df_live) -> dict:
+                if df_live is None or len(df_live) < 25:
+                    return {}
+                try:
+                    dec = _asset_decimals(asset_id)
+                    close = df_live["close"]
+                    e9  = _ema(close, 9)
+                    e21 = _ema(close, 21)
+                    r14 = _rsi(close, 14)
+                    a14 = _atr(df_live, 14)
+                    sma20 = close.rolling(20).mean()
+                    std20 = close.rolling(20).std(ddof=0)
+                    bb_u = sma20 + 2.0 * std20
+                    bb_l = sma20 - 2.0 * std20
+
+                    current = float(close.iloc[-1])
+                    prev = float(close.iloc[-2]) if len(close) > 1 else current
+                    n = min(80, len(df_live))
+                    ohlcv = [
+                        {
+                            "t": str(df_live.index[i]),
+                            "o": _safe_round(df_live["open"].iloc[i], dec),
+                            "h": _safe_round(df_live["high"].iloc[i], dec),
+                            "l": _safe_round(df_live["low"].iloc[i], dec),
+                            "c": _safe_round(df_live["close"].iloc[i], dec),
+                            "e9": _safe_round(e9.iloc[i], dec),
+                            "e21": _safe_round(e21.iloc[i], dec),
+                            "bbu": _safe_round(bb_u.iloc[i], dec),
+                            "bbl": _safe_round(bb_l.iloc[i], dec),
+                        }
+                        for i in range(-n, 0)
+                    ]
+                    return {
+                        "asset": asset_id,
+                        "price": _safe_round(current, dec),
+                        "change_pct": round((current / prev - 1) * 100, 4) if prev else 0,
+                        "ema_9": _safe_round(e9.iloc[-1], dec),
+                        "ema_21": _safe_round(e21.iloc[-1], dec),
+                        "rsi_14": _safe_round(r14.iloc[-1], 2),
+                        "atr_14": _safe_round(a14.iloc[-1], 6),
+                        "bb_upper": _safe_round(bb_u.iloc[-1], dec),
+                        "bb_middle": _safe_round(sma20.iloc[-1], dec),
+                        "bb_lower": _safe_round(bb_l.iloc[-1], dec),
+                        "ohlcv": ohlcv,
+                        "last_bar": str(df_live.index[-1]),
+                    }
+                except Exception:
+                    return {}
+
+            live_assets: dict = {}
+            for asset_id, df_live in intraday_map.items():
+                snapshot = _dashboard_live_snapshot(asset_id, df_live)
+                if snapshot:
+                    live_assets[asset_id] = snapshot
 
             # ---- EUR/USD indicators ----
             eurusd: dict = {}
@@ -753,6 +893,9 @@ class MarketWatcher:
                     "bb_lower":   round(float(bb_l.iloc[-1]), 5),
                     "ohlcv":      ohlcv,
                 }
+
+            if eurusd:
+                live_assets["EURUSD=X"] = eurusd
 
             # ---- News ----
             news_list: list[dict] = []
@@ -818,6 +961,7 @@ class MarketWatcher:
                 "recent_signals": list(reversed(self._recent_signals[-30:])),
                 "news":           news_list,
                 "eurusd":         eurusd,
+                "live_assets":    live_assets,
                 "themes": {
                     "last_analysis":       getattr(self._theme_analyzer, "_last_run", 0),
                     "narrative":           getattr(self._theme_analyzer, "narrative", ""),

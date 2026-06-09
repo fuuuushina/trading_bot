@@ -68,6 +68,8 @@ class IntradayEMACrossStrategy(BaseStrategy):
                             "Indicator NaN or zero ATR")
 
         rsi_val = float(rsi_vals.iloc[-1])
+        sep = abs(curr_fast - curr_slow)
+        min_sep = cfg.get("min_sep_atr_ratio", 0.25) * atr_val
 
         # Detect cross within last _CROSS_LOOKBACK bars
         n_look = min(_CROSS_LOOKBACK, len(fast) - 1)
@@ -85,8 +87,12 @@ class IntradayEMACrossStrategy(BaseStrategy):
                 bearish_cross = True
                 break
 
-        bullish_continuation = allow_continuation and curr_fast > curr_slow and c >= curr_fast * 0.9998
-        bearish_continuation = allow_continuation and curr_fast < curr_slow and c <= curr_fast * 1.0002
+        # Continuation: requires meaningful spread AND price above fast EMA
+        sep_ok = sep >= min_sep
+        bullish_continuation = (allow_continuation and sep_ok
+                                 and curr_fast > curr_slow and c >= curr_fast)
+        bearish_continuation = (allow_continuation and sep_ok
+                                 and curr_fast < curr_slow and c <= curr_fast)
 
         bullish_setup = bullish_cross or bullish_continuation
         bearish_setup = bearish_cross or bearish_continuation

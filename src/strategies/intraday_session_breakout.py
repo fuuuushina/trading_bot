@@ -38,8 +38,9 @@ from src.strategies.base import (
 _MIN_BARS = 40
 # UTC hours for session windows
 _SESSIONS = {
-    "london": (7, 0, 9, 30),    # (open_h, open_m, close_h, close_m)
-    "ny":     (13, 30, 16, 0),
+    "asian":  (0, 0, 3, 0),     # Tokyo/Asian open
+    "london": (7, 0, 9, 30),    # London open
+    "ny":     (13, 30, 16, 0),  # New York open
 }
 
 

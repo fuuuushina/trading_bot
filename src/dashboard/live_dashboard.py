@@ -56,6 +56,7 @@ except ImportError:
 
 BOT_STATE_FILE    = PROJECT_ROOT / "data" / "dashboard" / "bot_state.json"
 ALPACA_STATE_FILE = PROJECT_ROOT / "data" / "paper_trading" / "alpaca_state.json"
+ASSETS_FILE       = PROJECT_ROOT / "config" / "assets.yaml"
 REFRESH_MS = 15_000
 
 # ── Palettes ──────────────────────────────────────────────────────────────────
@@ -134,11 +135,21 @@ STRATEGY_INFO = {
         "desc": "Entre dans le sens de la cassure du range pré-session. Londres 07h-09h30 UTC, New York 13h30-16h UTC.",
         "when": "Ouverture London / NY (lun-ven)",
     },
+    "intraday_trend_scalp": {
+        "name": "Trend Scalp Multi-assets", "icon": "TS", "color": "#319795",
+        "desc": "Scalpe la tendance courte sur les instruments intraday geres par l'orchestrator : forex, crypto et or.",
+        "when": "Forex / crypto / or, 5min",
+    },
+    "intraday_macd": {
+        "name": "MACD Intraday", "icon": "M", "color": "#dd6b20",
+        "desc": "Confirme les impulsions intraday avec croisement MACD, momentum et filtres de confiance par asset.",
+        "when": "Forex / crypto / or, 5min",
+    },
 }
 
 TABS = [
     ("overview",   "Vue globale"),
-    ("eurusd",     "EUR/USD Live"),
+    ("eurusd",     "Live Multi-assets"),
     ("strategies", "Strategies"),
     ("positions",  "Positions Live"),
     ("portfolio",  "Portefeuille"),
@@ -147,8 +158,27 @@ TABS = [
     ("themes",     "Themes & Secteurs"),
 ]
 
+ASSET_DISPLAY_ORDER = ["EURUSD=X", "GBPUSD=X", "AUDUSD=X", "BTC-USD", "ETH-USD", "GC=F"]
+ASSET_DISPLAY_NAME = {
+    "EURUSD=X": "EUR/USD",
+    "GBPUSD=X": "GBP/USD",
+    "AUDUSD=X": "AUD/USD",
+    "BTC-USD": "BTC-USD",
+    "ETH-USD": "ETH-USD",
+    "GC=F": "GC=F (Or)",
+}
+
+SYSTEM_UPDATE_CARDS = [
+    ("Registre assets", "config/assets.yaml", "6 instruments tradables centralises avec levier, budget et strategies."),
+    ("Servo central", "TradingOrchestrator", "Distribution du capital et garde-fou contre la surconcentration par asset."),
+    ("RulesEngine", "min_volume_intraday=0", "Le filtre a ete corrige pour laisser passer la valeur zero explicitement."),
+    ("Liquidite", "crypto/futures OK", "Le check volume ne bloque plus les instruments dont le volume differe des actions."),
+    ("Stop-loss", "Prix exact du SL", "Les sorties SL n'appliquent plus le slippage qui creusait la perte."),
+]
+
 # Cache yfinance pour ne pas refetcher a chaque refresh
 _eur_yf_cache: dict = {"ts": 0.0, "data": {}}
+_live_asset_cache: dict[str, dict] = {}
 _equity_chart_cache: dict = {"ts": 0.0, "data": {}}
 
 
@@ -172,6 +202,27 @@ def read_alpaca_state() -> dict:
     except Exception:
         pass
     return {}
+
+
+def read_assets_config() -> dict:
+    try:
+        if ASSETS_FILE.exists():
+            import yaml
+            with open(ASSETS_FILE, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def managed_assets_config(enabled_only: bool = True) -> dict:
+    raw = read_assets_config()
+    assets = raw.get("assets", raw) if isinstance(raw, dict) else {}
+    if not isinstance(assets, dict):
+        return {}
+    if enabled_only:
+        return {k: v for k, v in assets.items() if isinstance(v, dict) and v.get("enabled", False)}
+    return {k: v for k, v in assets.items() if isinstance(v, dict)}
 
 
 _NEWS_FEEDS = [
@@ -345,6 +396,117 @@ def get_eurusd_data(state: dict) -> dict:
     return fetch_eurusd_live()
 
 
+def asset_price_decimals(asset_id: str) -> int:
+    if asset_id.endswith("=X"):
+        return 5
+    if asset_id in {"BTC-USD", "ETH-USD", "GC=F"}:
+        return 2
+    return 2
+
+
+def _safe_round(value, digits: int):
+    try:
+        value = float(value)
+        return round(value, digits) if value == value else None
+    except Exception:
+        return None
+
+
+def live_snapshot_from_df(asset_id: str, df) -> dict:
+    if df is None or len(df) < 25:
+        return {}
+    try:
+        from src.features.indicators import ema as _ema, rsi as _rsi, atr as _atr
+
+        dec = asset_price_decimals(asset_id)
+        close = df["close"]
+        e9 = _ema(close, 9)
+        e21 = _ema(close, 21)
+        r14 = _rsi(close, 14)
+        a14 = _atr(df, 14)
+        sma20 = close.rolling(20).mean()
+        std20 = close.rolling(20).std(ddof=0)
+        bb_u = sma20 + 2.0 * std20
+        bb_l = sma20 - 2.0 * std20
+
+        cur = float(close.iloc[-1])
+        prev = float(close.iloc[-2]) if len(close) > 1 else cur
+        n = min(80, len(df))
+        ohlcv = []
+        for i in range(-n, 0):
+            ohlcv.append({
+                "t": str(df.index[i]),
+                "o": _safe_round(df["open"].iloc[i], dec),
+                "h": _safe_round(df["high"].iloc[i], dec),
+                "l": _safe_round(df["low"].iloc[i], dec),
+                "c": _safe_round(df["close"].iloc[i], dec),
+                "e9": _safe_round(e9.iloc[i], dec),
+                "e21": _safe_round(e21.iloc[i], dec),
+                "bbu": _safe_round(bb_u.iloc[i], dec),
+                "bbl": _safe_round(bb_l.iloc[i], dec),
+            })
+
+        return {
+            "asset": asset_id,
+            "price": _safe_round(cur, dec),
+            "change_pct": round((cur / prev - 1) * 100, 4) if prev else 0,
+            "ema_9": _safe_round(e9.iloc[-1], dec),
+            "ema_21": _safe_round(e21.iloc[-1], dec),
+            "rsi_14": _safe_round(r14.iloc[-1], 2),
+            "atr_14": _safe_round(a14.iloc[-1], 6),
+            "bb_upper": _safe_round(bb_u.iloc[-1], dec),
+            "bb_middle": _safe_round(sma20.iloc[-1], dec),
+            "bb_lower": _safe_round(bb_l.iloc[-1], dec),
+            "ohlcv": ohlcv,
+            "last_bar": str(df.index[-1]),
+        }
+    except Exception:
+        return {}
+
+
+def fetch_live_asset_data(asset_id: str, cfg: dict | None = None) -> dict:
+    cfg = cfg or {}
+    cached = _live_asset_cache.get(asset_id)
+    if cached and time.time() - cached.get("ts", 0) < 60:
+        return cached.get("data", {})
+    try:
+        import yfinance as yf
+        from src.data.yfinance_helpers import normalize_yfinance_columns
+
+        period = str(cfg.get("data_period", "5d"))
+        interval = str(cfg.get("data_interval", "5m"))
+        df = yf.download(asset_id, period=period, interval=interval,
+                         auto_adjust=True, progress=False)
+        if df.empty:
+            return {}
+        df = normalize_yfinance_columns(df)
+        data = live_snapshot_from_df(asset_id, df)
+        if data:
+            _live_asset_cache[asset_id] = {"ts": time.time(), "data": data}
+        return data
+    except Exception:
+        return {}
+
+
+def get_live_assets_data(state: dict) -> dict[str, dict]:
+    assets_cfg = managed_assets_config(enabled_only=True)
+    live_assets = dict(state.get("live_assets", {}) or {})
+    if state.get("eurusd") and "EURUSD=X" not in live_assets:
+        live_assets["EURUSD=X"] = state["eurusd"]
+
+    fresh = bot_freshness(state)
+    for asset_id in ASSET_DISPLAY_ORDER:
+        cfg = assets_cfg.get(asset_id)
+        if not cfg:
+            continue
+        if fresh == "live" and live_assets.get(asset_id):
+            continue
+        fetched = fetch_live_asset_data(asset_id, cfg)
+        if fetched:
+            live_assets[asset_id] = fetched
+    return live_assets
+
+
 # ── Composants UI ─────────────────────────────────────────────────────────────
 
 def tip(text: str, tooltip: str) -> html.Span:
@@ -451,6 +613,184 @@ def grid2(left, right, left_width: str = "1fr", right_width: str = "220px") -> h
     })
 
 
+# ── Helpers dashboard multi-assets ────────────────────────────────────────────
+def fmt_money(value: float, decimals: int = 0) -> str:
+    try:
+        return f"${float(value):,.{decimals}f}"
+    except Exception:
+        return "$0"
+
+
+def dashboard_capital_reference(state: dict) -> float:
+    port = state.get("portfolio", {}) if isinstance(state, dict) else {}
+    for key in ("available_cash", "total_capital", "total_equity", "initial_capital"):
+        try:
+            value = float(port.get(key, 0) or 0)
+        except Exception:
+            value = 0.0
+        if value > 0:
+            return value
+    return 0.0
+
+
+def asset_registry_rows(state: dict) -> list[dict]:
+    assets = managed_assets_config(enabled_only=True)
+    if not assets:
+        return []
+
+    ordered_ids = ASSET_DISPLAY_ORDER + sorted(
+        aid for aid in assets.keys() if aid not in ASSET_DISPLAY_ORDER
+    )
+    capital_ref = dashboard_capital_reference(state)
+    rows: list[dict] = []
+
+    for asset_id in ordered_ids:
+        cfg = assets.get(asset_id)
+        if not cfg:
+            continue
+        leverage = float(cfg.get("leverage", 1) or 1)
+        max_margin_pct = float(cfg.get("max_margin_pct", 0) or 0)
+        margin_max = capital_ref * max_margin_pct
+        notional_max = margin_max * leverage
+        strategies = [str(s).replace("intraday_", "") for s in cfg.get("strategies", [])]
+        rows.append({
+            "asset": ASSET_DISPLAY_NAME.get(asset_id, cfg.get("name", asset_id)),
+            "ticker": asset_id,
+            "type": str(cfg.get("type", "-")),
+            "levier": f"x{leverage:g}",
+            "cap": f"{max_margin_pct * 100:.0f}%",
+            "margin": fmt_money(margin_max),
+            "notional": fmt_money(notional_max),
+            "strategies": ", ".join(strategies),
+        })
+    return rows
+
+
+def system_update_panel(state: dict, compact: bool = False) -> html.Div:
+    rows = asset_registry_rows(state)
+    capital_ref = dashboard_capital_reference(state)
+    active_count = len(rows) or 6
+
+    cards = [
+        html.Div([
+            html.Div(title, style={
+                "fontSize": "11px", "fontWeight": "900", "color": C_MUTED,
+                "textTransform": "uppercase", "letterSpacing": "0.06em",
+            }),
+            html.Div(value, style={
+                "fontSize": "15px", "fontWeight": "900", "color": C_TEXT,
+                "marginTop": "4px",
+            }),
+            html.Div(desc, style={
+                "fontSize": "12px", "color": C_MUTED, "lineHeight": "1.45",
+                "marginTop": "5px",
+            }),
+        ], style={
+            "border": f"1px solid {C_BORDER}", "borderRadius": "8px",
+            "padding": "10px 12px", "background": "#f8fafc",
+        })
+        for title, value, desc in SYSTEM_UPDATE_CARDS
+    ]
+
+    return html.Div([
+        html.Div([
+            html.Div([
+                html.Div("Mise a jour systeme", style={
+                    "fontSize": "13px", "fontWeight": "900", "color": C_ACCENT,
+                    "textTransform": "uppercase", "letterSpacing": "0.08em",
+                }),
+                html.Div(
+                    f"Machinerie multi-assets en place : {active_count} assets tradables simultanement.",
+                    style={"fontSize": "13px", "color": C_TEXT, "marginTop": "4px", "fontWeight": "700"},
+                ),
+            ]),
+            badge("Redemarrage requis", C_ORANGE, "#fffaf0"),
+        ], style={"display": "flex", "justifyContent": "space-between",
+                  "gap": "12px", "alignItems": "start", "marginBottom": "12px"}),
+
+        html.Div([
+            html.Div("A activer au redemarrage", style={
+                "fontWeight": "900", "fontSize": "12px", "color": C_ORANGE,
+                "marginBottom": "4px",
+            }),
+            html.Div(
+                "Les 2 dernieres positions perdantes viennent de l'ancien code SL encore en memoire. "
+                "Apres redemarrage, le fix SL ferme au prix exact du stop et evite le slippage anormal.",
+                style={"fontSize": "13px", "color": C_TEXT, "lineHeight": "1.55"},
+            ),
+        ], style={
+            "background": "#fffaf0", "border": f"1px solid {C_ORANGE}30",
+            "borderRadius": "8px", "padding": "10px 12px", "marginBottom": "12px",
+        }),
+
+        html.Div([
+            html.Span("Budget de reference : ", style={"fontWeight": "800", "color": C_MUTED}),
+            html.Span(fmt_money(capital_ref, 2), style={"fontWeight": "900", "color": C_TEXT}),
+            html.Span(" | SL max attendu apres fix : environ -$38 au lieu des sorties degradees.",
+                      style={"color": C_MUTED}),
+        ], style={"fontSize": "12px", "marginBottom": "12px"}) if capital_ref else None,
+
+        html.Div(cards, style={
+            "display": "grid",
+            "gridTemplateColumns": "repeat(auto-fit, minmax(180px, 1fr))",
+            "gap": "10px",
+        }) if not compact else None,
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_ACCENT}30",
+        "borderRadius": "10px", "padding": "14px 16px", "marginBottom": "14px",
+        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)",
+    })
+
+
+def asset_registry_panel(state: dict, compact: bool = False) -> html.Div:
+    rows = asset_registry_rows(state)
+    if not rows:
+        return html.Div()
+
+    columns = [
+        {"name": "Asset", "id": "asset"},
+        {"name": "Ticker", "id": "ticker"},
+        {"name": "Type", "id": "type"},
+        {"name": "Levier", "id": "levier"},
+        {"name": "Cap marge", "id": "cap"},
+        {"name": "Marge max", "id": "margin"},
+        {"name": "Notional max", "id": "notional"},
+    ]
+    if not compact:
+        columns.append({"name": "Strategies", "id": "strategies"})
+
+    return html.Div([
+        html.Div([
+            html.Div("Registre assets tradables", style={
+                "fontWeight": "900", "fontSize": "13px", "color": C_TEXT,
+            }),
+            html.Div(
+                "Le capital est reparti par asset pour eviter la surconcentration.",
+                style={"fontSize": "12px", "color": C_MUTED, "marginTop": "3px"},
+            ),
+        ], style={"padding": "12px 16px", "borderBottom": f"1px solid {C_BORDER}"}),
+        dash_table.DataTable(
+            columns=columns,
+            data=rows,
+            page_size=6,
+            style_table={"overflowX": "auto"},
+            style_header={"backgroundColor": "#ebf8ff", "fontWeight": "800",
+                          "fontSize": "11px", "border": f"1px solid {C_ACCENT}20"},
+            style_cell={"fontSize": "12px", "padding": "7px 10px",
+                        "fontFamily": "Inter, sans-serif", "whiteSpace": "normal",
+                        "height": "auto"},
+            style_data_conditional=[
+                {"if": {"row_index": "odd"}, "backgroundColor": "#f7fbff"},
+                {"if": {"column_id": "notional"}, "fontWeight": "800", "color": C_ACCENT},
+                {"if": {"column_id": "margin"}, "fontWeight": "800"},
+            ],
+        ),
+    ], style={
+        "background": C_PANEL, "border": f"1px solid {C_ACCENT}30",
+        "borderRadius": "10px", "overflow": "hidden", "marginBottom": "14px",
+    })
+
+
 # ── Graphiques ────────────────────────────────────────────────────────────────
 
 def equity_chart(history: list[dict], initial: float,
@@ -476,7 +816,11 @@ def equity_chart(history: list[dict], initial: float,
     return fig
 
 
-def eurusd_chart(ohlcv: list[dict]) -> go.Figure:
+def eurusd_chart(
+    ohlcv: list[dict],
+    trades: list[dict] | None = None,
+    open_position: dict | None = None,
+) -> go.Figure:
     if not ohlcv:
         return empty_fig("EUR/USD — En attente de données 5min...")
 
@@ -520,7 +864,115 @@ def eurusd_chart(ohlcv: list[dict]) -> go.Figure:
         fig.add_trace(go.Scatter(x=times, y=e21v, line={"color": "#3182ce", "width": 1.5},
                                  name="EMA 21", hovertemplate="%{y:.5f}<extra>EMA21</extra>"), row=1, col=1)
 
-    # RSI sur sous-graphique (calculer depuis les closes)
+    # Plage de temps des bougies — ne tracer les marqueurs que dans cette fenêtre
+    t_start = times[0][:19] if times else ""
+    t_end   = times[-1][:19] if times else ""
+
+    # ── Marqueurs des trades (seulement dans la fenêtre visible) ─────────────
+    if trades:
+        buy_t, buy_p, buy_lbl = [], [], []
+        sell_t, sell_p, sell_lbl = [], [], []
+        close_t, close_p, close_lbl = [], [], []
+        for tr in trades:
+            if tr.get("asset") != "EURUSD=X":
+                continue
+            opened = str(tr.get("opened_at") or tr.get("created_at", ""))[:19]
+            closed = str(tr.get("closed_at", ""))[:19]
+            entry  = float(tr.get("entry_price") or tr.get("avg_entry") or tr.get("fill_price") or 0)
+            exit_p = float(tr.get("exit_price") or tr.get("close_price") or 0)
+            pnl    = float(tr.get("pnl") or 0)
+            side   = tr.get("side", "long")
+            strat  = tr.get("strategy", "")
+            # N'afficher que les trades dont l'heure est dans la plage du graphique
+            if opened and t_start and opened < t_start:
+                continue
+            if entry > 0:
+                if side in ("long", "BUY"):
+                    buy_t.append(opened)
+                    buy_p.append(entry)
+                    buy_lbl.append(f"ACHAT @ {entry:.5f}<br>{strat}<br>PnL: {pnl:+.2f}$")
+                else:
+                    sell_t.append(opened)
+                    sell_p.append(entry)
+                    sell_lbl.append(f"VENTE @ {entry:.5f}<br>{strat}<br>PnL: {pnl:+.2f}$")
+            if closed and exit_p > 0 and closed >= t_start:
+                pnl_sym = "+" if pnl >= 0 else ""
+                close_t.append(closed)
+                close_p.append(exit_p)
+                close_lbl.append(f"CLÔTURE @ {exit_p:.5f}<br>PnL: {pnl_sym}{pnl:.2f}$")
+
+        if buy_t:
+            fig.add_trace(go.Scatter(
+                x=buy_t, y=buy_p, mode="markers",
+                marker={"symbol": "triangle-up", "size": 14, "color": "#38a169",
+                        "line": {"color": "#fff", "width": 1}},
+                name="Achat", hovertext=buy_lbl, hoverinfo="text",
+            ), row=1, col=1)
+        if sell_t:
+            fig.add_trace(go.Scatter(
+                x=sell_t, y=sell_p, mode="markers",
+                marker={"symbol": "triangle-down", "size": 14, "color": "#e53e3e",
+                        "line": {"color": "#fff", "width": 1}},
+                name="Vente", hovertext=sell_lbl, hoverinfo="text",
+            ), row=1, col=1)
+        if close_t:
+            fig.add_trace(go.Scatter(
+                x=close_t, y=close_p, mode="markers",
+                marker={"symbol": "circle-open", "size": 10, "color": "#805ad5",
+                        "line": {"color": "#805ad5", "width": 2}},
+                name="Clôture", hovertext=close_lbl, hoverinfo="text",
+            ), row=1, col=1)
+
+    # ── Position ouverte : shape SL/TP + marqueur entrée ────────────────────
+    if open_position:
+        entry = float(open_position.get("avg_entry") or open_position.get("current_price") or 0)
+        sl    = open_position.get("stop_loss")
+        tp    = open_position.get("take_profit")
+        side  = open_position.get("side", "long")
+        opened = str(open_position.get("opened_at", ""))[:19]
+        entry_color = "#38a169" if side == "long" else "#e53e3e"
+
+        # Lignes horizontales via add_shape (plus stable que add_hline avec subplots)
+        yref = "y"
+        if entry:
+            fig.add_shape(type="line", x0=t_start, x1=t_end, y0=entry, y1=entry,
+                          line={"color": entry_color, "width": 1.5, "dash": "solid"},
+                          xref="x", yref=yref)
+            fig.add_annotation(x=t_end, y=entry, text=f"Entrée {entry:.5f}",
+                               xref="x", yref=yref, showarrow=False,
+                               font={"size": 9, "color": entry_color},
+                               xanchor="right", yanchor="bottom")
+        if sl:
+            sl = float(sl)
+            fig.add_shape(type="line", x0=t_start, x1=t_end, y0=sl, y1=sl,
+                          line={"color": "#e53e3e", "width": 1, "dash": "dot"},
+                          xref="x", yref=yref)
+            fig.add_annotation(x=t_end, y=sl, text=f"SL {sl:.5f}",
+                               xref="x", yref=yref, showarrow=False,
+                               font={"size": 9, "color": "#e53e3e"},
+                               xanchor="right", yanchor="top")
+        if tp:
+            tp = float(tp)
+            fig.add_shape(type="line", x0=t_start, x1=t_end, y0=tp, y1=tp,
+                          line={"color": "#38a169", "width": 1, "dash": "dot"},
+                          xref="x", yref=yref)
+            fig.add_annotation(x=t_end, y=tp, text=f"TP {tp:.5f}",
+                               xref="x", yref=yref, showarrow=False,
+                               font={"size": 9, "color": "#38a169"},
+                               xanchor="right", yanchor="bottom")
+        # Triangle d'entrée sur le graphique
+        if opened and opened >= t_start and entry:
+            marker_sym = "triangle-up" if side == "long" else "triangle-down"
+            fig.add_trace(go.Scatter(
+                x=[opened], y=[entry], mode="markers",
+                marker={"symbol": marker_sym, "size": 16, "color": entry_color,
+                        "line": {"color": "#fff", "width": 2}},
+                name="Position ouverte",
+                hovertext=[f"OUVERT {'Long' if side=='long' else 'Short'} @ {entry:.5f}"],
+                hoverinfo="text",
+            ), row=1, col=1)
+
+    # RSI sous-graphique
     try:
         import numpy as np
         c_arr = [v for v in closes if v is not None]
@@ -577,6 +1029,163 @@ def rsi_gauge(rsi_val: float) -> go.Figure:
     fig.update_layout(height=180, margin={"l": 20, "r": 20, "t": 25, "b": 5},
                       paper_bgcolor=C_PANEL)
     return fig
+
+
+def format_live_price(asset_id: str, value) -> str:
+    try:
+        dec = asset_price_decimals(asset_id)
+        return f"{float(value):,.{dec}f}"
+    except Exception:
+        return "-"
+
+
+def format_live_atr(asset_id: str, value) -> str:
+    try:
+        val = float(value or 0)
+        if asset_id.endswith("=X"):
+            return f"{val * 10000:.1f} pips"
+        return f"{val:,.2f}"
+    except Exception:
+        return "-"
+
+
+def asset_sparkline(asset_id: str, data: dict) -> go.Figure:
+    ohlcv = (data or {}).get("ohlcv", [])[-48:]
+    fig = go.Figure()
+    if not ohlcv:
+        fig.add_annotation(text="Pas de donnees", x=0.5, y=0.5,
+                           xref="paper", yref="paper", showarrow=False,
+                           font={"size": 11, "color": C_MUTED})
+    else:
+        x_vals = [r.get("t", "") for r in ohlcv]
+        y_vals = [r.get("c") for r in ohlcv]
+        chg = float((data or {}).get("change_pct", 0) or 0)
+        color = C_GREEN if chg >= 0 else C_RED
+        fig.add_trace(go.Scatter(
+            x=x_vals, y=y_vals, mode="lines",
+            line={"color": color, "width": 2},
+            hovertemplate="%{y}<extra></extra>",
+        ))
+    fig.update_layout(
+        height=90, margin={"l": 6, "r": 6, "t": 6, "b": 6},
+        paper_bgcolor="#f8fafc", plot_bgcolor="#f8fafc",
+        showlegend=False,
+        xaxis={"visible": False},
+        yaxis={"visible": False},
+    )
+    return fig
+
+
+def latest_signal_for_asset(signals: list[dict], asset_id: str) -> dict:
+    for sig in signals or []:
+        if sig.get("asset") == asset_id:
+            return sig
+    return {}
+
+
+def live_asset_card(asset_id: str, data: dict, position: dict | None, signal: dict | None) -> html.Div:
+    cfg = managed_assets_config(enabled_only=True).get(asset_id, {})
+    label = ASSET_DISPLAY_NAME.get(asset_id, cfg.get("name", asset_id))
+    asset_type = str(cfg.get("type", "asset")).upper()
+    price = data.get("price") if data else None
+    chg = float(data.get("change_pct", 0) or 0) if data else 0.0
+    rsi_val = data.get("rsi_14") if data else None
+    ema9 = data.get("ema_9") if data else None
+    ema21 = data.get("ema_21") if data else None
+    atr_val = data.get("atr_14") if data else None
+    chg_col = C_GREEN if chg >= 0 else C_RED
+
+    if ema9 and ema21:
+        trend = "EMA haussiere" if float(ema9) > float(ema21) else "EMA baissiere"
+        trend_col = C_GREEN if float(ema9) > float(ema21) else C_RED
+    else:
+        trend, trend_col = "EMA -", C_MUTED
+
+    pos_line = "Aucune position"
+    pos_col = C_MUTED
+    if position:
+        side = str(position.get("side", "")).upper()
+        pnl = float(position.get("unrealized_pnl", 0) or 0)
+        pnl_pct = float(position.get("unrealized_pnl_pct", 0) or 0) * 100
+        pos_line = f"{side} | {pnl:+.2f}$ ({pnl_pct:+.2f}%)"
+        pos_col = C_GREEN if pnl >= 0 else C_RED
+
+    sig_action = (signal or {}).get("action") or (signal or {}).get("signal") or "-"
+    sig_reason = str((signal or {}).get("reason", ""))[:58]
+
+    return html.Div([
+        html.Div([
+            html.Div([
+                html.Div(label, style={"fontWeight": "900", "fontSize": "15px", "color": C_TEXT}),
+                html.Div(asset_type, style={"fontSize": "10px", "fontWeight": "900", "color": C_MUTED,
+                                            "letterSpacing": "0.08em"}),
+            ]),
+            signal_badge_el(sig_action),
+        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "start",
+                  "gap": "10px", "marginBottom": "8px"}),
+
+        html.Div([
+            html.Div(format_live_price(asset_id, price) if price is not None else "-",
+                     style={"fontWeight": "900", "fontSize": "24px", "color": C_TEXT,
+                            "lineHeight": "1.05"}),
+            html.Div(f"{chg:+.4f}%", style={"fontWeight": "900", "fontSize": "13px", "color": chg_col}),
+        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "baseline",
+                  "gap": "10px", "marginBottom": "6px"}),
+
+        dcc.Graph(figure=asset_sparkline(asset_id, data or {}), config={"displayModeBar": False}),
+
+        html.Div([
+            _mini_stat("RSI", f"{float(rsi_val):.1f}" if rsi_val is not None else "-", C_PURPLE),
+            _mini_stat("Tendance", trend, trend_col),
+            _mini_stat("ATR", format_live_atr(asset_id, atr_val), C_ACCENT),
+        ], style={"display": "grid", "gridTemplateColumns": "0.65fr 1fr 0.8fr",
+                  "gap": "8px", "marginTop": "8px"}),
+
+        html.Div(pos_line, style={"fontSize": "12px", "fontWeight": "800", "color": pos_col,
+                                  "marginTop": "9px"}),
+        html.Div(sig_reason or "En attente du prochain signal.",
+                 style={"fontSize": "11px", "color": C_MUTED, "marginTop": "4px",
+                        "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis"}),
+    ], style={
+        "background": C_PANEL,
+        "border": f"1px solid {C_BORDER}",
+        "borderLeft": f"4px solid {chg_col}",
+        "borderRadius": "10px",
+        "padding": "12px 14px",
+        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)",
+        "minWidth": 0,
+    })
+
+
+def all_assets_live_panel(state: dict, live_assets: dict[str, dict]) -> html.Div:
+    positions = {p.get("asset"): p for p in state.get("positions", [])}
+    signals = state.get("recent_signals", [])
+    assets_cfg = managed_assets_config(enabled_only=True)
+    cards = []
+    for asset_id in ASSET_DISPLAY_ORDER:
+        if asset_id not in assets_cfg:
+            continue
+        cards.append(live_asset_card(
+            asset_id=asset_id,
+            data=live_assets.get(asset_id, {}),
+            position=positions.get(asset_id),
+            signal=latest_signal_for_asset(signals, asset_id),
+        ))
+
+    return html.Div([
+        html.Div([
+            html.Div("Live tous instruments", style={
+                "fontWeight": "900", "fontSize": "13px", "color": C_TEXT,
+            }),
+            html.Div("Forex, crypto et or en 5 minutes, depuis le bot ou le fallback yfinance.",
+                     style={"fontSize": "12px", "color": C_MUTED, "marginTop": "3px"}),
+        ], style={"marginBottom": "10px"}),
+        html.Div(cards, style={
+            "display": "grid",
+            "gridTemplateColumns": "repeat(auto-fit, minmax(250px, 1fr))",
+            "gap": "12px",
+        }),
+    ], style={"marginBottom": "14px"})
 
 
 # ── Page : Vue Globale ────────────────────────────────────────────────────────
@@ -777,7 +1386,7 @@ def page_overview(state: dict, alpaca: dict) -> html.Div:
         "borderRadius": "10px", "overflow": "hidden", "marginBottom": "14px",
     })
 
-    children = [banner, eur_kpis]
+    children = [banner, system_update_panel(state), asset_registry_panel(state), eur_kpis]
     if alpaca_block:
         children.append(alpaca_block)
     children += [eq_panel, events_panel]
@@ -787,7 +1396,8 @@ def page_overview(state: dict, alpaca: dict) -> html.Div:
 # ── Page : EUR/USD Live ───────────────────────────────────────────────────────
 
 def page_eurusd(state: dict) -> html.Div:
-    eur = get_eurusd_data(state)
+    live_assets = get_live_assets_data(state)
+    eur = live_assets.get("EURUSD=X") or get_eurusd_data(state)
 
     if not eur:
         return html.Div([
@@ -809,6 +1419,12 @@ def page_eurusd(state: dict) -> html.Div:
     bb_l    = eur.get("bb_lower", 0)
     ohlcv   = eur.get("ohlcv", [])
     chg_col = C_GREEN if chg >= 0 else C_RED
+
+    # ── Trades et position ouverte EUR/USD ───────────────────────────────────
+    all_trades    = state.get("recent_trades", [])
+    all_positions = state.get("positions", [])
+    eur_trades    = [t for t in all_trades    if t.get("asset") == "EURUSD=X"]
+    eur_position  = next((p for p in all_positions if p.get("asset") == "EURUSD=X"), None)
 
     # Interprétations
     if ema9 and ema21:
@@ -852,21 +1468,17 @@ def page_eurusd(state: dict) -> html.Div:
         "gap": "10px", "marginBottom": "14px",
     })
 
-    # Sessions
+    # Sessions — alignées avec les fenêtres de intraday_session_breakout.py
     now_utc   = datetime.now(timezone.utc)
     total_min = now_utc.hour * 60 + now_utc.minute
-    # Fenêtres exactes utilisées par intraday_session_breakout.py
     sessions  = [
-        ("Londres",  7*60,      9*60+30,  "#38a169"),   # 07:00-09:30 UTC
-        ("New York", 13*60+30,  16*60,    "#3182ce"),   # 13:30-16:00 UTC
-        ("Asie",     22*60,     8*60,     "#805ad5"),   # 22:00-08:00 UTC (chevauche minuit)
+        ("Asie/Tokyo",  0,         3*60,     "#805ad5"),   # 00:00-03:00 UTC
+        ("Londres",     7*60,      9*60+30,  "#38a169"),   # 07:00-09:30 UTC
+        ("New York",    13*60+30,  16*60,    "#3182ce"),   # 13:30-16:00 UTC
     ]
     sess_items = []
     for name, start, end, col in sessions:
-        if start < end:
-            active = start <= total_min < end
-        else:  # session traverse minuit (ex: Asie 22h-08h)
-            active = total_min >= start or total_min < end
+        active = start <= total_min < end
         sess_items.append(html.Div([
             html.Div("●", style={"color": col if active else "#cbd5e0", "fontSize": "20px"}),
             html.Div(name, style={"fontWeight": "700", "fontSize": "13px",
@@ -882,22 +1494,136 @@ def page_eurusd(state: dict) -> html.Div:
     sessions_panel = card_wrap([
         html.Div("Sessions de trading", style={"fontWeight": "800", "marginBottom": "10px", "fontSize": "13px"}),
         html.Div(sess_items, style={"display": "flex", "gap": "10px"}),
-        html.Div(f"UTC actuel : {now_utc.strftime('%H:%M')}  —  Chevauchement London+NY : 13h30-16h00 UTC",
+        html.Div(f"UTC actuel : {now_utc.strftime('%H:%M')}  —  Forex ouvert 00:01-21:45 UTC (24/5)  |  Chevauchement London+NY : 13h30-16h00 UTC",
                  style={"fontSize": "12px", "color": C_MUTED, "marginTop": "8px"}),
     ])
 
     chart_el = card_wrap(
-        dcc.Graph(figure=eurusd_chart(ohlcv), config={"displayModeBar": False, "scrollZoom": True}),
-        padding="0",
-    )
-    gauge_el = card_wrap(
-        dcc.Graph(figure=rsi_gauge(rsi_val), config={"displayModeBar": False}),
+        dcc.Graph(
+            figure=eurusd_chart(ohlcv, trades=eur_trades, open_position=eur_position),
+            config={"displayModeBar": False, "scrollZoom": True},
+        ),
         padding="0",
     )
 
+    # ── Panneau droit : RSI gauge + position live ────────────────────────────
+    right_children = [
+        dcc.Graph(figure=rsi_gauge(rsi_val), config={"displayModeBar": False}),
+        html.Hr(style={"margin": "8px 0", "borderColor": C_BORDER}),
+    ]
+
+    if eur_position:
+        side      = eur_position.get("side", "long")
+        entry_p   = float(eur_position.get("avg_entry") or eur_position.get("current_price") or 0)
+        cur_p     = float(eur_position.get("current_price") or entry_p)
+        upnl      = float(eur_position.get("unrealized_pnl") or 0)
+        upnl_pct  = float(eur_position.get("unrealized_pnl_pct") or 0)
+        sl        = eur_position.get("stop_loss")
+        tp        = eur_position.get("take_profit")
+        qty       = float(eur_position.get("quantity") or 0)
+        strat     = eur_position.get("strategy", "—")
+        side_lbl  = "LONG ▲" if side == "long" else "SHORT ▼"
+        side_col  = C_GREEN if side == "long" else C_RED
+        pnl_col   = C_GREEN if upnl >= 0 else C_RED
+        right_children += [
+            html.Div("Position ouverte", style={
+                "fontWeight": "800", "fontSize": "11px", "color": C_MUTED,
+                "textTransform": "uppercase", "letterSpacing": "0.05em",
+                "marginBottom": "6px",
+            }),
+            html.Div(side_lbl, style={
+                "fontWeight": "900", "fontSize": "18px", "color": side_col,
+                "marginBottom": "4px",
+            }),
+            html.Div(f"{qty:.4f} lots", style={"fontSize": "11px", "color": C_MUTED, "marginBottom": "8px"}),
+            html.Div([
+                html.Div("Entrée", style={"fontSize": "10px", "color": C_MUTED}),
+                html.Div(f"{entry_p:.5f}", style={"fontWeight": "700", "fontSize": "13px"}),
+            ], style={"marginBottom": "4px"}),
+            html.Div([
+                html.Div("Prix actuel", style={"fontSize": "10px", "color": C_MUTED}),
+                html.Div(f"{cur_p:.5f}", style={"fontWeight": "700", "fontSize": "13px"}),
+            ], style={"marginBottom": "6px"}),
+            html.Div([
+                html.Div("P&L non réalisé", style={"fontSize": "10px", "color": C_MUTED}),
+                html.Div(f"{upnl:+.2f}$", style={
+                    "fontWeight": "900", "fontSize": "16px", "color": pnl_col,
+                }),
+                html.Div(f"({upnl_pct:+.2%})", style={"fontSize": "11px", "color": pnl_col}),
+            ], style={"marginBottom": "6px"}),
+            html.Div([
+                html.Span("SL ", style={"fontSize": "10px", "color": "#e53e3e", "fontWeight": "700"}),
+                html.Span(f"{float(sl):.5f}" if sl else "—", style={"fontSize": "11px"}),
+            ], style={"marginBottom": "2px"}),
+            html.Div([
+                html.Span("TP ", style={"fontSize": "10px", "color": "#38a169", "fontWeight": "700"}),
+                html.Span(f"{float(tp):.5f}" if tp else "—", style={"fontSize": "11px"}),
+            ], style={"marginBottom": "6px"}),
+            html.Div(strat[:20], style={"fontSize": "10px", "color": C_MUTED, "fontStyle": "italic"}),
+        ]
+    else:
+        right_children += [
+            html.Div("Aucune position", style={
+                "textAlign": "center", "color": C_MUTED,
+                "fontSize": "12px", "padding": "12px 0",
+            }),
+            html.Div("En attente de signal...", style={
+                "textAlign": "center", "color": C_MUTED,
+                "fontSize": "11px", "fontStyle": "italic",
+            }),
+        ]
+
+    right_panel = card_wrap(right_children, padding="12px")
+
+    # ── Tableau des trades EUR/USD (pleine largeur, en bas) ──────────────────
+    trades_card = None
+    if eur_trades:
+        rows = []
+        for tr in reversed(eur_trades[-15:]):
+            side_t   = tr.get("side", "long")
+            entry_t  = float(tr.get("entry_price") or tr.get("avg_entry") or tr.get("fill_price") or 0)
+            exit_t   = tr.get("exit_price") or tr.get("close_price")
+            pnl_t    = float(tr.get("pnl") or 0)
+            strat_t  = tr.get("strategy", "—")
+            opened_t = str(tr.get("opened_at", ""))[:16]
+            pnl_c    = C_GREEN if pnl_t >= 0 else C_RED
+            side_c   = C_GREEN if side_t in ("long", "BUY") else C_RED
+            rows.append(html.Tr([
+                html.Td(opened_t, style={"fontSize": "11px", "color": C_MUTED, "padding": "4px 8px"}),
+                html.Td(html.Span("▲ Long" if side_t in ("long", "BUY") else "▼ Short",
+                                  style={"color": side_c, "fontWeight": "700", "fontSize": "11px"}),
+                        style={"padding": "4px 8px"}),
+                html.Td(f"{entry_t:.5f}" if entry_t else "—",
+                        style={"fontSize": "11px", "padding": "4px 8px"}),
+                html.Td(f"{float(exit_t):.5f}" if exit_t else "ouvert",
+                        style={"fontSize": "11px", "color": C_MUTED, "padding": "4px 8px"}),
+                html.Td(f"{pnl_t:+.2f}$",
+                        style={"fontWeight": "700", "fontSize": "11px", "color": pnl_c, "padding": "4px 8px"}),
+                html.Td(strat_t[:24], style={"fontSize": "10px", "color": C_MUTED, "padding": "4px 8px"}),
+            ]))
+        trades_card = card_wrap([
+            html.Div("Derniers trades EUR/USD", style={
+                "fontWeight": "800", "fontSize": "13px", "marginBottom": "8px",
+            }),
+            html.Table([
+                html.Thead(html.Tr([
+                    html.Th(h, style={"fontSize": "10px", "color": C_MUTED, "fontWeight": "600",
+                                      "padding": "4px 8px", "borderBottom": f"1px solid {C_BORDER}",
+                                      "textAlign": "left"})
+                    for h in ["Heure", "Sens", "Entrée", "Sortie", "P&L", "Stratégie"]
+                ])),
+                html.Tbody(rows),
+            ], style={"width": "100%", "borderCollapse": "collapse"}),
+        ])
+
+    bottom_els = [trades_card] if trades_card else []
+
     return html.Div([
-        kpis, sessions_panel,
-        grid2(chart_el, gauge_el, left_width="1fr", right_width="210px"),
+        kpis,
+        all_assets_live_panel(state, live_assets),
+        sessions_panel,
+        grid2(chart_el, right_panel, left_width="1fr", right_width="210px"),
+        *bottom_els,
     ])
 
 
@@ -922,15 +1648,15 @@ def page_strategies(state: dict) -> html.Div:
     forex_closed = is_weekend or not has_intraday
 
     regime_map = {
-        "bull_trend":        ["Tendance (EMA)", "Cassure N-jours", "Momentum Sectoriel", "Croisement EMA (Forex)", "Cassure de Session (Forex)"],
-        "bear_trend":        ["Momentum Sectoriel", "Croisement EMA (Forex)"],
-        "range":             ["Dip RSI(2)", "Momentum Sectoriel", "Bollinger + RSI (Forex)", "Croisement EMA (Forex)"],
-        "high_volatility":   ["Dip RSI(2)", "Croisement EMA (Forex)"],
-        "low_volatility":    ["Tendance (EMA)", "Momentum Sectoriel", "Bollinger + RSI (Forex)", "Croisement EMA (Forex)"],
+        "bull_trend":        ["Tendance (EMA)", "Cassure N-jours", "Momentum Sectoriel", "Trend Scalp Multi-assets", "MACD Intraday", "Croisement EMA (Forex)", "Cassure de Session (Forex)"],
+        "bear_trend":        ["Momentum Sectoriel", "Trend Scalp Multi-assets", "MACD Intraday", "Croisement EMA (Forex)"],
+        "range":             ["Dip RSI(2)", "Momentum Sectoriel", "Bollinger + RSI (Forex)", "MACD Intraday", "Croisement EMA (Forex)"],
+        "high_volatility":   ["Dip RSI(2)", "Trend Scalp Multi-assets", "MACD Intraday", "Croisement EMA (Forex)"],
+        "low_volatility":    ["Tendance (EMA)", "Momentum Sectoriel", "Bollinger + RSI (Forex)", "Trend Scalp Multi-assets", "Croisement EMA (Forex)"],
         "panic":             ["Aucune — pause"],
-        "compression":       ["Bollinger + RSI (Forex)", "Cassure de Session (Forex)"],
-        "breakout_expansion":["Cassure N-jours", "Tendance (EMA)", "Cassure de Session (Forex)", "Croisement EMA (Forex)"],
-        "unknown":           ["Tendance (EMA)", "Dip RSI(2)", "Momentum Sectoriel", "Croisement EMA (Forex)"],
+        "compression":       ["Bollinger + RSI (Forex)", "MACD Intraday", "Cassure de Session (Forex)"],
+        "breakout_expansion":["Cassure N-jours", "Tendance (EMA)", "Trend Scalp Multi-assets", "MACD Intraday", "Cassure de Session (Forex)", "Croisement EMA (Forex)"],
+        "unknown":           ["Tendance (EMA)", "Dip RSI(2)", "Momentum Sectoriel", "Trend Scalp Multi-assets", "MACD Intraday", "Croisement EMA (Forex)"],
     }
     active_strats = regime_map.get(regime, ["Selon régime"])
 
@@ -940,14 +1666,20 @@ def page_strategies(state: dict) -> html.Div:
             html.Span(f"{REGIME_ICON.get(regime,'?')} {regime_fr}  → ", style={"color": C_MUTED}),
             *[badge(s, C_ACCENT) for s in active_strats],
         ], style={"display": "flex", "alignItems": "center", "gap": "6px", "flexWrap": "wrap"}),
-        html.Div("⚠ Forex fermé ce week-end — stratégies intraday EUR/USD en pause jusqu'à lundi 07h UTC.", style={
+        html.Div("⚠ Forex fermé ce week-end — stratégies forex en pause; crypto/or restent surveillés si les données sont disponibles.", style={
             "marginTop": "8px", "fontSize": "12px", "color": C_ORANGE, "fontWeight": "600",
         }) if forex_closed else None,
     ])
 
     swing_ids    = {"trend_following", "breakout", "rsi_dip_buyer", "thematic_momentum",
                     "ema_cross_swing", "momentum_burst"}
-    intraday_ids = {"intraday_ema_cross", "intraday_bollinger_rsi", "intraday_session_breakout"}
+    intraday_ids = {
+        "intraday_ema_cross",
+        "intraday_bollinger_rsi",
+        "intraday_session_breakout",
+        "intraday_trend_scalp",
+        "intraday_macd",
+    }
 
     cards = []
     prev_group = None
@@ -955,7 +1687,7 @@ def page_strategies(state: dict) -> html.Div:
         # Section separator between swing and intraday groups
         group = "swing" if strat_id in swing_ids else "intraday"
         if group != prev_group:
-            label = "Actions & ETF (Swing)" if group == "swing" else "EUR/USD Forex (Intraday 5min)"
+            label = "Actions & ETF (Swing)" if group == "swing" else "Multi-assets Intraday 5min"
             cards.append(html.Div(label, style={
                 "fontSize": "11px", "fontWeight": "800", "textTransform": "uppercase",
                 "letterSpacing": "0.08em", "color": C_MUTED,
@@ -1016,6 +1748,8 @@ def page_strategies(state: dict) -> html.Div:
         }))
 
     return html.Div([
+        system_update_panel(state, compact=True),
+        asset_registry_panel(state, compact=True),
         regime_info,
         html.Div(cards, style={"display": "flex", "flexDirection": "column", "gap": "12px"}),
     ])
@@ -1177,8 +1911,18 @@ def page_positions(state: dict) -> html.Div:
     port     = state.get("portfolio", {})
     news     = state.get("news", [])
 
-    equity_pos = [p for p in pos_list if not p["asset"].endswith("=X")]
-    forex_pos  = [p for p in pos_list if p["asset"].endswith("=X")]
+    managed_cfg = managed_assets_config(enabled_only=True)
+
+    def _is_managed_intraday_position(position: dict) -> bool:
+        asset = str(position.get("asset", ""))
+        try:
+            lev = float(position.get("leverage", 1) or 1)
+        except Exception:
+            lev = 1.0
+        return asset in managed_cfg or asset.endswith("=X") or lev > 1.0
+
+    managed_pos = [p for p in pos_list if _is_managed_intraday_position(p)]
+    equity_pos  = [p for p in pos_list if not _is_managed_intraday_position(p)]
 
     # Fetch charts
     tickers = [p["asset"] for p in equity_pos]
@@ -1391,28 +2135,38 @@ def page_positions(state: dict) -> html.Div:
         })
         cards.append(card)
 
-    # ── Forex positions table ─────────────────────────────────────────────────
-    if forex_pos:
+    # ── Managed intraday positions table ──────────────────────────────────────
+    if managed_pos:
         fx_rows = [{
-            "asset": p["asset"],
-            "qty":   str(p.get("quantity", "—")),
+            "asset": ASSET_DISPLAY_NAME.get(p["asset"], p["asset"]),
+            "ticker": p["asset"],
+            "type": str(managed_cfg.get(p["asset"], {}).get("type", "intraday")),
+            "levier": f"x{float(p.get('leverage', managed_cfg.get(p['asset'], {}).get('leverage', 1)) or 1):g}",
+            "qty": str(p.get("quantity", "—")),
             "entree": f"${float(p.get('avg_entry', 0)):,.4f}",
             "actuel": f"${float(p.get('current_price', 0)):,.4f}",
-            "pnl":    f"${float(p.get('unrealized_pnl', 0)):+,.4f}",
-            "strat":  p.get("strategy", "—"),
-        } for p in forex_pos]
+            "marge": f"${float(p.get('margin', p.get('market_value', 0))):,.2f}",
+            "notional": f"${float(p.get('notional', p.get('market_value', 0))):,.2f}",
+            "pnl": f"${float(p.get('unrealized_pnl', 0)):+,.4f}",
+            "strat": p.get("strategy", "—"),
+        } for p in managed_pos]
 
         cards.append(html.Div([
-            html.Div("Positions Forex (EUR/USD)", style={
+            html.Div("Positions multi-assets intraday", style={
                 "padding": "8px 16px", "fontWeight": "800", "fontSize": "13px",
                 "borderBottom": f"1px solid {C_BORDER}",
             }),
             dash_table.DataTable(
                 columns=[
                     {"name": "Actif",      "id": "asset"},
+                    {"name": "Ticker",     "id": "ticker"},
+                    {"name": "Type",       "id": "type"},
+                    {"name": "Levier",     "id": "levier"},
                     {"name": "Qte",        "id": "qty"},
                     {"name": "Entree",     "id": "entree"},
                     {"name": "Actuel",     "id": "actuel"},
+                    {"name": "Marge",      "id": "marge"},
+                    {"name": "Notional",   "id": "notional"},
                     {"name": "P&L",        "id": "pnl"},
                     {"name": "Strategie",  "id": "strat"},
                 ],

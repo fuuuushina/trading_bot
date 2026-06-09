@@ -68,7 +68,8 @@ class StatisticalRules:
     """Pure data-quality and statistical filter rules."""
 
     def __init__(self, risk_cfg: dict, settings_cfg: dict) -> None:
-        self.risk = risk_cfg
+        # Unwrap: accept both the full YAML dict and the inner "risk:" section
+        self.risk = risk_cfg.get("risk", risk_cfg)
         self.settings = settings_cfg
 
     def check_minimum_volume(
@@ -172,8 +173,10 @@ class StatisticalRules:
         name = "sufficient_liquidity"
         if "volume" not in df.columns:
             return RuleResult(name, True, "No volume data — skipped.", "warn")
-        if signal.asset.endswith("=X"):
-            return RuleResult(name, True, "Forex tick volume unavailable/unreliable — skipped.", "warn")
+        # Skip for forex (=X), crypto (-USD), and futures (=F) — volume scales differ
+        asset = signal.asset
+        if asset.endswith("=X") or asset.endswith("-USD") or asset.endswith("=F"):
+            return RuleResult(name, True, "Non-equity asset — liquidity check skipped.", "warn")
         vol_r = float(volume_ratio(df, 20).iloc[-1])
         # Liquidity must be at least 50% of average
         passed = vol_r >= 0.5
@@ -207,7 +210,7 @@ class StrategicRules:
     """Higher-level strategic / operational rules."""
 
     def __init__(self, risk_cfg: dict, settings_cfg: dict) -> None:
-        self.risk = risk_cfg
+        self.risk = risk_cfg.get("risk", risk_cfg)
         self.settings = settings_cfg
 
     def check_market_hours(self, signal: Signal) -> RuleResult:

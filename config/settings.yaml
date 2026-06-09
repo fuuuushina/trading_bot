@@ -68,9 +68,9 @@ market_hours:
   us_close: "20:00"
   pre_market_buffer_minutes: 15
   post_market_buffer_minutes: 0
-  intraday_cutoff_minutes_before_close: 30
-  forex_open: "07:00"     # London open UTC
-  forex_close: "21:00"    # NY close UTC
+  intraday_cutoff_minutes_before_close: 15
+  forex_open: "00:01"     # Ouverture dimanche soir / lundi 00:01 UTC (24/5)
+  forex_close: "22:00"    # Clôture NY vendredi soir UTC
 
 # ---- Broker ----
 broker:
@@ -137,6 +137,10 @@ market_watcher:
   # Fetch config for intraday tickers (EURUSD=X, etc.)
   intraday_period: "5d"           # yfinance period for 5min data (max 60d)
   intraday_interval: "5m"         # yfinance interval for intraday
+  # Forex leverage: 50:1 margin trading for intraday forex pairs (EURUSD=X etc.)
+  # Margin = position_size_usd, Notional = margin × leverage
+  # 80% capital at 50:1 = ~$92k notional → $92 per 10 pips
+  forex_leverage: 50
 
 # ---- Market Analyst (LLM) ----
 market_analyst:

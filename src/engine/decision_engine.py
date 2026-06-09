@@ -32,7 +32,9 @@ from src.strategies.base import Horizon, Signal, SignalType
 from src.strategies.breakout import BreakoutStrategy
 from src.strategies.intraday_bollinger_rsi import IntradayBollingerRSIStrategy
 from src.strategies.intraday_ema_cross import IntradayEMACrossStrategy
+from src.strategies.intraday_macd import IntradayMACDStrategy
 from src.strategies.intraday_session_breakout import IntradaySessionBreakoutStrategy
+from src.strategies.intraday_trend_scalp import IntradayTrendScalpStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.rsi_dip_buyer import RSIDipBuyerStrategy
 from src.strategies.tactical_dca import TacticalDCAStrategy
@@ -120,6 +122,8 @@ class DecisionEngine:
             "intraday_ema_cross":       IntradayEMACrossStrategy(scfg.get("intraday_ema_cross", {})),
             "intraday_bollinger_rsi":   IntradayBollingerRSIStrategy(scfg.get("intraday_bollinger_rsi", {})),
             "intraday_session_breakout": IntradaySessionBreakoutStrategy(scfg.get("intraday_session_breakout", {})),
+            "intraday_trend_scalp":      IntradayTrendScalpStrategy(scfg.get("intraday_trend_scalp", {})),
+            "intraday_macd":             IntradayMACDStrategy(scfg.get("intraday_macd", {})),
         }
 
     # ------------------------------------------------------------------ #
@@ -134,6 +138,7 @@ class DecisionEngine:
         trade_history: list[dict],
         vix_series: Optional[pd.Series] = None,
         intraday_data_map: Optional[dict[str, pd.DataFrame]] = None,
+        asset_strategy_map: Optional[dict[str, list[str]]] = None,
     ) -> list[DecisionRecord]:
         """
         Run one full decision cycle across all assets.
@@ -219,13 +224,16 @@ class DecisionEngine:
                     raw_signals.append(raw_signal)
 
         # Intraday strategies — run on 5min intraday data (EURUSD=X etc.)
-        intraday_strategy_names = active_by_horizon.get("intraday", [])
+        # asset_strategy_map (from TradingOrchestrator) overrides per-asset strategy selection;
+        # falls back to the regime map's intraday list for legacy/unmanaged assets.
+        intraday_fallback = active_by_horizon.get("intraday", [])
         for asset, df in (intraday_data_map or {}).items():
             if df is None or df.empty:
                 continue
             df_map[asset] = df  # used later for _evaluate_signal
 
-            for strategy_name in intraday_strategy_names:
+            asset_strats = (asset_strategy_map or {}).get(asset) or intraday_fallback
+            for strategy_name in asset_strats:
                 if strategy_name not in self._strategies:
                     continue
                 if strategy_name not in self._enabled_strategies:

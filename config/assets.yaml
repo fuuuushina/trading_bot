@@ -1,0 +1,105 @@
+# ============================================================
+# ASSET REGISTRY — Géré par TradingOrchestrator
+# ============================================================
+assets:
+
+  # === FOREX (USD comme devise de cotation) ===
+  EURUSD=X:
+    name: "EUR/USD"
+    type: forex
+    enabled: true
+    leverage: 50
+    strategies:
+      - intraday_trend_scalp
+      - intraday_ema_cross
+      - intraday_macd
+      - intraday_bollinger_rsi
+      - intraday_session_breakout
+    max_margin_pct: 0.10   # 10% capital = $200 margin @ $2000 = $10k notional
+    data_interval: "5m"
+    data_period: "5d"
+    min_confidence: 0.45
+
+  GBPUSD=X:
+    name: "GBP/USD"
+    type: forex
+    enabled: true
+    leverage: 50
+    strategies:
+      - intraday_trend_scalp
+      - intraday_ema_cross
+      - intraday_macd
+      - intraday_bollinger_rsi
+    max_margin_pct: 0.10
+    data_interval: "5m"
+    data_period: "5d"
+    min_confidence: 0.45
+
+  AUDUSD=X:
+    name: "AUD/USD"
+    type: forex
+    enabled: true
+    leverage: 30
+    strategies:
+      - intraday_trend_scalp
+      - intraday_ema_cross
+      - intraday_macd
+    max_margin_pct: 0.08
+    data_interval: "5m"
+    data_period: "5d"
+    min_confidence: 0.48
+
+  NZDUSD=X:
+    name: "NZD/USD"
+    type: forex
+    enabled: false   # activer après validation EUR/USD et GBP/USD
+    leverage: 30
+    strategies:
+      - intraday_trend_scalp
+      - intraday_ema_cross
+    max_margin_pct: 0.10
+    data_interval: "5m"
+    data_period: "5d"
+    min_confidence: 0.50
+
+  # === CRYPTO ===
+  BTC-USD:
+    name: "Bitcoin / USD"
+    type: crypto
+    enabled: true
+    leverage: 10
+    strategies:
+      - intraday_trend_scalp
+      - intraday_macd
+    max_margin_pct: 0.08
+    data_interval: "5m"
+    data_period: "5d"
+    min_confidence: 0.50
+
+  ETH-USD:
+    name: "Ethereum / USD"
+    type: crypto
+    enabled: true
+    leverage: 10
+    strategies:
+      - intraday_trend_scalp
+      - intraday_macd
+    max_margin_pct: 0.08
+    data_interval: "5m"
+    data_period: "5d"
+    min_confidence: 0.50
+
+  # === OR (spot) ===
+  GC=F:
+    name: "Gold Futures"
+    type: commodity
+    enabled: true
+    leverage: 20
+    strategies:
+      - intraday_trend_scalp
+      - intraday_ema_cross
+      - intraday_macd
+    max_margin_pct: 0.08
+    data_interval: "5m"
+    data_period: "5d"
+    min_confidence: 0.48

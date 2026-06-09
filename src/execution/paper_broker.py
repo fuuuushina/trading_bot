@@ -106,6 +106,7 @@ class Position:
     take_profit: Optional[float] = None
     opened_at: datetime = field(default_factory=datetime.utcnow)
     metadata: dict = field(default_factory=dict)
+    leverage: float = 1.0   # >1 for forex margin positions
 
     @property
     def unrealized_pnl(self) -> float:
@@ -114,15 +115,33 @@ class Position:
 
     @property
     def unrealized_pnl_pct(self) -> float:
-        cost = self.avg_entry_price * self.quantity
+        # For leveraged positions: pnl relative to margin (not notional)
+        notional = self.avg_entry_price * self.quantity
+        cost = notional / self.leverage if self.leverage > 1.0 else notional
         return self.unrealized_pnl / cost if cost != 0 else 0.0
 
     @property
+    def margin(self) -> float:
+        """Cash posted as margin (= notional for unleveraged positions)."""
+        return self.avg_entry_price * self.quantity / self.leverage
+
+    @property
     def market_value(self) -> float:
+        """
+        Value used for portfolio equity calculation.
+        For leveraged: margin + unrealized PnL (what you'd get back on close).
+        For non-leveraged: standard quantity × current_price.
+        """
+        if self.leverage > 1.0:
+            return self.margin + self.unrealized_pnl
+        return self.quantity * self.current_price
+
+    @property
+    def notional_value(self) -> float:
         return self.quantity * self.current_price
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "asset": self.asset,
             "side": self.side,
             "quantity": self.quantity,
@@ -137,6 +156,11 @@ class Position:
             "horizon": self.horizon,
             "opened_at": self.opened_at.isoformat(),
         }
+        if self.leverage > 1.0:
+            d["leverage"] = self.leverage
+            d["notional"] = round(self.notional_value, 2)
+            d["margin"] = round(self.margin, 2)
+        return d
 
 
 class PaperBroker:
@@ -298,14 +322,14 @@ class PaperBroker:
 
             if pos.side == "long":
                 if pos.stop_loss and price <= pos.stop_loss:
-                    to_close.append((asset, "stop_loss", price))
+                    to_close.append((asset, "stop_loss", pos.stop_loss))
                 elif pos.take_profit and price >= pos.take_profit:
-                    to_close.append((asset, "take_profit", price))
+                    to_close.append((asset, "take_profit", pos.take_profit))
             else:  # short
                 if pos.stop_loss and price >= pos.stop_loss:
-                    to_close.append((asset, "stop_loss", price))
+                    to_close.append((asset, "stop_loss", pos.stop_loss))
                 elif pos.take_profit and price <= pos.take_profit:
-                    to_close.append((asset, "take_profit", price))
+                    to_close.append((asset, "take_profit", pos.take_profit))
 
         for asset, reason, price in to_close:
             event = self._close_position(asset, price, reason)
@@ -327,13 +351,23 @@ class PaperBroker:
     # ------------------------------------------------------------------ #
 
     def get_portfolio_state(self) -> dict:
-        long_market_value = sum(p.market_value for p in self._positions.values() if p.side == "long")
-        short_market_value = sum(p.market_value for p in self._positions.values() if p.side == "short")
-        total_market_value = long_market_value + short_market_value
+        # Separate leveraged vs non-leveraged positions
+        # For leveraged: market_value = margin + pnl → always ADD to equity (long or short)
+        # For non-leveraged: standard long +, short -
+        non_lev_long = sum(p.market_value for p in self._positions.values()
+                           if p.side == "long" and p.leverage <= 1.0)
+        non_lev_short = sum(p.market_value for p in self._positions.values()
+                            if p.side == "short" and p.leverage <= 1.0)
+        lev_value = sum(p.market_value for p in self._positions.values()
+                        if p.leverage > 1.0)
+
+        total_market_value = non_lev_long + non_lev_short + sum(
+            p.notional_value for p in self._positions.values() if p.leverage > 1.0
+        )
         total_unrealized = sum(p.unrealized_pnl for p in self._positions.values())
-        total_equity = self.cash + long_market_value - short_market_value
-        available_cash = max(0.0, self.cash - short_market_value)
-        peak_equity = self.initial_capital  # simplified — track running peak separately
+        total_equity = self.cash + non_lev_long - non_lev_short + lev_value
+        available_cash = max(0.0, self.cash)
+        peak_equity = self.initial_capital
         drawdown_pct = (total_equity - peak_equity) / peak_equity
 
         asset_exposure = {a: p.market_value for a, p in self._positions.items()}
@@ -349,10 +383,14 @@ class PaperBroker:
             "total_capital": total_equity,
             "cash": round(self.cash, 2),
             "available_cash": round(available_cash, 2),
-            "restricted_short_proceeds": round(short_market_value, 2),
+            "restricted_short_proceeds": round(non_lev_short, 2),
             "total_market_value": round(total_market_value, 2),
-            "total_exposure": round(total_market_value, 2),
-            "total_exposure_pct": round(total_market_value / (total_equity + 1e-10), 4),
+            "total_exposure": round(non_lev_long + non_lev_short + sum(
+                p.margin for p in self._positions.values() if p.leverage > 1.0
+            ), 2),
+            "total_exposure_pct": round((non_lev_long + non_lev_short + sum(
+                p.margin for p in self._positions.values() if p.leverage > 1.0
+            )) / (total_equity + 1e-10), 4),
             "total_equity": round(total_equity, 2),
             "unrealized_pnl": round(total_unrealized, 2),
             "realized_pnl": round(realized_pnl, 2),
@@ -397,6 +435,7 @@ class PaperBroker:
                         "strategy":      p.strategy_name,
                         "horizon":       p.horizon,
                         "opened_at":     p.opened_at.isoformat(),
+                        "leverage":      p.leverage,
                     }
                     for p in self._positions.values()
                 ],
@@ -433,6 +472,7 @@ class PaperBroker:
                     horizon=pos.get("horizon", "swing"),
                     stop_loss=pos.get("stop_loss"),
                     take_profit=pos.get("take_profit"),
+                    leverage=float(pos.get("leverage", 1.0)),
                     opened_at=opened,
                 )
             logger.info(
@@ -456,14 +496,18 @@ class PaperBroker:
             fill_price = base_price * (1 - self.slippage_pct)
 
         existing = self._positions.get(order.asset)
-        if existing is not None:
-            closes_existing = (
-                (existing.side == "long" and order.side == OrderSide.SELL)
-                or (existing.side == "short" and order.side == OrderSide.BUY)
-            )
-            if closes_existing and order.quantity > existing.quantity:
-                order.metadata["quantity_capped_to_position"] = existing.quantity
-                order.quantity = existing.quantity
+        is_closing = existing is not None and (
+            (existing.side == "long" and order.side == OrderSide.SELL)
+            or (existing.side == "short" and order.side == OrderSide.BUY)
+        )
+        if is_closing and order.quantity > existing.quantity:
+            order.metadata["quantity_capped_to_position"] = existing.quantity
+            order.quantity = existing.quantity
+
+        # Inherit leverage from existing position when closing (auto-close via SL/TP)
+        leverage = float(order.metadata.get("leverage", 1.0))
+        if leverage <= 1.0 and existing is not None and is_closing:
+            leverage = getattr(existing, "leverage", 1.0)
 
         commission = self.commission_flat + fill_price * order.quantity * self.commission_pct
         gross_value = fill_price * order.quantity
@@ -475,46 +519,71 @@ class PaperBroker:
             logger.warning("Order rejected (quantity): %s %s", order.order_id, order.asset)
             return
 
-        if order.side == OrderSide.BUY and gross_value + commission > self.cash:
-            order.status = OrderStatus.REJECTED
-            order.metadata["rejection_reason"] = (
-                f"Insufficient cash: need ${gross_value + commission:.2f}, "
-                f"have ${self.cash:.2f}"
-            )
-            self._order_history.append(order)
-            logger.warning("Order rejected (cash): %s %s", order.order_id, order.asset)
-            return
+        # ---- Cash accounting (leverage-aware) ----
+        if leverage > 1.0:
+            if is_closing:
+                # Return margin + PnL when closing a leveraged position
+                closed_qty = min(order.quantity, existing.quantity)
+                direction = 1 if existing.side == "long" else -1
+                pnl = direction * (fill_price - existing.avg_entry_price) * closed_qty
+                margin_back = existing.avg_entry_price * closed_qty / leverage
+                self.cash += margin_back + pnl - commission
+            else:
+                # Opening: deduct only margin (not full notional)
+                margin_needed = gross_value / leverage + commission
+                if margin_needed > self.cash:
+                    order.status = OrderStatus.REJECTED
+                    order.metadata["rejection_reason"] = (
+                        f"Insufficient margin: need ${margin_needed:.2f}, have ${self.cash:.2f}"
+                    )
+                    self._order_history.append(order)
+                    logger.warning("Order rejected (margin): %s %s", order.order_id, order.asset)
+                    return
+                self.cash -= margin_needed
+        else:
+            # Standard non-leveraged accounting
+            if order.side == OrderSide.BUY and gross_value + commission > self.cash:
+                order.status = OrderStatus.REJECTED
+                order.metadata["rejection_reason"] = (
+                    f"Insufficient cash: need ${gross_value + commission:.2f}, "
+                    f"have ${self.cash:.2f}"
+                )
+                self._order_history.append(order)
+                logger.warning("Order rejected (cash): %s %s", order.order_id, order.asset)
+                return
+            if order.side == OrderSide.BUY:
+                self.cash -= gross_value + commission
+            else:
+                self.cash += gross_value - commission
 
         order.status = OrderStatus.FILLED
         order.filled_quantity = order.quantity
-        order.filled_price = round(fill_price, 4)
-        order.commission = round(commission, 4)
-        order.slippage = round(abs(fill_price - base_price) * order.quantity, 4)
+        order.filled_price = round(fill_price, 6)
+        order.commission = round(commission, 6)
+        order.slippage = round(abs(fill_price - base_price) * order.quantity, 6)
         order.filled_at = datetime.utcnow()
-
         self._order_history.append(order)
 
-        existing = self._positions.get(order.asset)
         if order.side == OrderSide.BUY:
-            self.cash -= gross_value + commission
             if existing is not None and existing.side == "short":
                 self._reduce_or_close_position(order, fill_price)
             else:
-                self._open_or_add_position(order, fill_price)
+                self._open_or_add_position(order, fill_price, leverage=leverage)
         else:
-            self.cash += gross_value - commission
             if existing is not None and existing.side == "long":
                 self._reduce_or_close_position(order, fill_price)
             else:
-                self._open_or_add_position(order, fill_price)
+                self._open_or_add_position(order, fill_price, leverage=leverage)
 
         logger.info(
-            "FILL: %s %s %s x%.2f @ %.4f commission=%.2f",
+            "FILL: %s %s %s x%.2f @ %.6f lev=%.0fx commission=%.4f",
             order.order_id, order.side.value, order.asset,
-            order.quantity, fill_price, commission
+            order.quantity, fill_price, leverage, commission
         )
 
-    def _open_or_add_position(self, order: Order, fill_price: float) -> None:
+    def _open_or_add_position(
+        self, order: Order, fill_price: float, leverage: float = 1.0
+    ) -> None:
         meta = order.metadata
         side = "long" if order.side == OrderSide.BUY else "short"
         if order.asset in self._positions:
@@ -542,6 +611,7 @@ class PaperBroker:
                 horizon=order.horizon,
                 stop_loss=meta.get("stop_loss"),
                 take_profit=meta.get("take_profit"),
+                leverage=leverage,
                 metadata=meta,
             )
 
@@ -582,14 +652,15 @@ class PaperBroker:
             return None
         pos = self._positions[asset]
         side = OrderSide.SELL if pos.side == "long" else OrderSide.BUY
+        # Propagate leverage so _fill_order uses correct margin accounting
         close_order = self.submit_market_order(
             asset=asset,
             side=side,
             quantity=pos.quantity,
             strategy_name=pos.strategy_name,
             horizon=pos.horizon,
-            metadata={"auto_close_reason": reason},
+            metadata={"auto_close_reason": reason, "leverage": pos.leverage},
         )
         self.fill_pending_orders({asset: price})
-        logger.info("Auto-close %s: %s @ %.4f (reason=%s)", asset, side.value, price, reason)
+        logger.info("Auto-close %s: %s @ %.6f (reason=%s)", asset, side.value, price, reason)
         return {"asset": asset, "reason": reason, "price": price}

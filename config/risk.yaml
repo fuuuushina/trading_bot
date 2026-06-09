@@ -6,39 +6,39 @@
 
 risk:
   # ---- Per-trade risk ----
-  max_risk_per_trade_pct: 0.03     # 3% of capital per trade (paper mode)
-  min_risk_reward_ratio: 1.2       # Minimum R:R to accept trade
-  max_leverage: 1.0                # No leverage — spot only
+  max_risk_per_trade_pct: 0.03     # 3% risk = sizing input (not hard limit)
+  min_risk_reward_ratio: 1.2
+  max_leverage: 50.0               # Forex intraday leverage (EUR/USD standard)
 
   # ---- Daily / weekly / monthly loss limits ----
-  max_daily_loss_pct: 0.03         # 3%
-  max_weekly_loss_pct: 0.06        # 6%
-  max_monthly_drawdown_pct: 0.12   # 12%
-  max_total_drawdown_pct: 0.20     # 20% — triggers defensive mode
+  max_daily_loss_pct: 0.10         # 10%
+  max_weekly_loss_pct: 0.20        # 20%
+  max_monthly_drawdown_pct: 0.30   # 30%
+  max_total_drawdown_pct: 0.40     # 40% — triggers defensive mode
 
   # ---- Exposure limits ----
   max_total_exposure_pct: 0.80     # 80% max invested
   min_cash_reserve_pct: 0.10       # Always keep 10% cash
-  max_intraday_allocation_pct: 0.30
+  max_intraday_allocation_pct: 0.90   # 90% of capital can be intraday margin (multi-asset)
   max_swing_allocation_pct: 0.50
   max_long_term_allocation_pct: 0.80
 
   # ---- Position limits ----
   max_open_positions: 25
   max_positions_per_strategy: 8
-  max_exposure_per_asset_pct: 0.30    # 30% max in a single asset (paper mode)
-  max_exposure_per_sector_pct: 0.50   # 50% max per sector (paper mode)
+  max_exposure_per_asset_pct: 0.30    # 30% per asset — allows 4 simultaneous positions
+  max_exposure_per_sector_pct: 0.95
 
   # ---- Correlation ----
   max_correlation_exposure: 0.70      # Block if portfolio correlation > 0.70
 
   # ---- Intraday specific ----
   intraday:
-    max_consecutive_losses: 3
-    max_daily_trades: 20
-    stop_after_daily_loss_pct: 0.02   # 2% intraday daily loss ($40 on $2000)
-    min_volume_intraday: 1000000
-    max_spread_pct: 0.002             # 0.2%
+    max_consecutive_losses: 20
+    max_daily_trades: 200
+    stop_after_daily_loss_pct: 0.20   # 20% before stopping intraday (paper mode — agressif)
+    min_volume_intraday: 0            # no volume filter on forex
+    max_spread_pct: 0.005             # 0.5% — relaxed for aggressive mode
 
   # ---- Swing specific ----
   swing:
@@ -52,9 +52,9 @@ risk:
 
 # ---- Kill Switch triggers ----
 kill_switch:
-  daily_loss_pct: 0.05        # 5% daily loss before halt (paper mode — relaxed)
-  weekly_loss_pct: 0.10       # 10%
-  monthly_drawdown_pct: 0.20  # 20%
+  daily_loss_pct: 0.25        # 25% daily loss before halt (paper mode — agressif)
+  weekly_loss_pct: 0.40       # 40%
+  monthly_drawdown_pct: 0.50  # 50%
   max_api_errors_per_hour: 10
   max_data_gap_minutes: 15
   max_latency_ms: 5000
@@ -65,17 +65,17 @@ kill_switch:
 # ---- Defensive mode ----
 defensive_mode:
   # Triggered when conditions deteriorate — reduces exposure automatically
-  trigger_drawdown_pct: 0.05
-  max_exposure_pct: 0.40
-  intraday_enabled: false
+  trigger_drawdown_pct: 0.30    # 30% drawdown avant mode défensif (paper mode)
+  max_exposure_pct: 0.80
+  intraday_enabled: true        # Toujours actif — intraday génère du P&L
   swing_enabled: true
   long_term_enabled: true
-  auto_exit_losing_swing: true
+  auto_exit_losing_swing: false
 
 # ---- Position sizing defaults ----
 position_sizing:
   method: "fixed_fractional"   # fixed_fractional | kelly | equal_weight
   kelly_fraction: 0.25          # Conservative Kelly (quarter-Kelly)
   fixed_risk_pct: 0.02          # 2% risk per trade → ~$40 risk on $2000
-  min_position_usd: 50.0        # Minimum trade size
-  max_position_usd: 600.0       # Max per trade (paper mode)
+  min_position_usd: 50.0        # Minimum margin per trade
+  max_position_usd: 500000.0    # No hard cap — risk formula controls size
