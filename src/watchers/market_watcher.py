@@ -81,6 +81,17 @@ class MarketState:
         }
 
 
+def _infer_asset_type(asset: str) -> str:
+    """Map an asset symbol to a KellySizer asset_type string."""
+    if asset in {"BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "LTC-USD"}:
+        return "crypto"
+    if asset in {"GC=F", "CL=F", "SI=F", "NG=F", "HG=F"}:
+        return "commodity"
+    if asset.endswith("=X"):
+        return "forex"
+    return "equity"
+
+
 # ------------------------------------------------------------------ #
 # Market Watcher
 # ------------------------------------------------------------------ #
@@ -135,6 +146,17 @@ class MarketWatcher:
         risk_cfg     = cfg.get("risk", {})
         settings_cfg = cfg
         self.orchestrator = TradingOrchestrator(assets_cfg, risk_cfg, settings_cfg)
+
+        # ML pipeline — partagé entre le tracker et le decision engine
+        from src.ml.signal_filter import SignalQualityFilter
+        from src.ml.performance_tracker import PerformanceTracker
+        from src.risk.kelly_sizer import KellySizer
+
+        self._signal_filter = SignalQualityFilter()
+        self._perf_tracker  = PerformanceTracker(self._signal_filter)
+        self._kelly_sizer   = KellySizer()
+        # Inject shared filter into decision engine (no restart needed)
+        self.engine.signal_filter = self._signal_filter
 
         # Fréquences (en secondes) — MVP : tout à 15 min
         watcher_cfg = cfg.get("market_watcher", {})
@@ -698,7 +720,21 @@ class MarketWatcher:
             return
 
         self.broker.fill_pending_orders(current_prices)
+
+        # Snapshot trade count BEFORE stop/target checks to detect newly closed positions
+        prev_trade_count = len(self.broker.get_trade_history())
         self.broker.check_stops_and_targets(current_prices)
+
+        # Record closed positions in performance tracker
+        new_trades = self.broker.get_trade_history()[prev_trade_count:]
+        for trade in new_trades:
+            asset      = trade.get("asset", "")
+            exit_price = float(trade.get("exit_price") or trade.get("filled_price") or 0)
+            pnl        = float(trade.get("pnl", 0))
+            horizon    = trade.get("horizon", "intraday")
+            if asset and exit_price > 0:
+                self._perf_tracker.on_close(asset, exit_price, pnl, horizon)
+
         submitted_orders = 0
 
         for dec in decisions:
@@ -713,9 +749,30 @@ class MarketWatcher:
                 continue
             side = OrderSide.BUY if signal.signal.value == "BUY" else OrderSide.SELL
             current_price = float(current_prices[signal.asset])
+
+            # Kelly-based sizing
+            portfolio_now  = self.broker.get_portfolio_state()
+            total_capital  = float(
+                portfolio_now.get("total_equity")
+                or portfolio_now.get("total_capital")
+                or getattr(self.broker, "initial_capital", 2000.0)
+            )
+            kelly_params = self._perf_tracker.kelly_params(asset=signal.asset)
+            asset_type   = _infer_asset_type(signal.asset)
+            kelly_size   = self._kelly_sizer.margin_usd(
+                capital    = total_capital,
+                win_rate   = kelly_params["win_rate"],
+                avg_win    = kelly_params["avg_win"],
+                avg_loss   = kelly_params["avg_loss"],
+                confidence = signal.confidence,
+                ml_score   = float(signal.metadata.get("ml_score", 0.5)),
+                regime     = self._last_regime,
+                asset_type = asset_type,
+            )
+
             size_usd, shares, budget_reason = self._execution_size_with_current_budget(
                 signal,
-                float(dec.risk_verdict.approved_size_usd or 0.0),
+                kelly_size,
                 current_price,
             )
             if shares <= 0:
@@ -725,6 +782,7 @@ class MarketWatcher:
                 )
                 continue
 
+            lev = 1.0
             # Build order metadata — include leverage for managed and legacy forex assets
             order_meta: dict = {}
             if hasattr(self, 'orchestrator') and self.orchestrator.is_managed_asset(signal.asset):
@@ -735,6 +793,8 @@ class MarketWatcher:
                 lev = float(self.cfg.get("market_watcher", {}).get("forex_leverage", 1.0))
                 if lev > 1.0:
                     order_meta["leverage"] = lev
+
+            self._kelly_sizer.log_sizing(signal.asset, total_capital, kelly_size / total_capital, lev)
 
             order = self.broker.submit_market_order(
                 asset=signal.asset,
@@ -748,6 +808,16 @@ class MarketWatcher:
             )
             self.broker.fill_pending_orders(current_prices)
             submitted_orders += 1
+
+            # Record position opening in performance tracker
+            features = signal.metadata.get("_signal_features", {})
+            self._perf_tracker.on_open(
+                asset        = signal.asset,
+                strategy     = signal.strategy_name,
+                features     = features,
+                entry_price  = float(order.filled_price or current_price),
+                side         = "long" if side == OrderSide.BUY else "short",
+            )
 
             self.alerts.trade_executed(
                 asset=signal.asset,

@@ -26,6 +26,7 @@ import pandas as pd
 
 from src.engine.signal_aggregator import SignalAggregator
 from src.features.regime_detector import MarketRegimeDetector, RegimeResult
+from src.ml.signal_filter import SignalQualityFilter, build_signal_features
 from src.risk.risk_manager import KillSwitchTriggered, RiskDecision, RiskManager, RiskVerdict
 from src.rules.rules_engine import RulesEngine, RulesVerdict
 from src.strategies.base import Horizon, Signal, SignalType
@@ -90,6 +91,7 @@ class DecisionEngine:
         settings_cfg: dict,
         strategy_cfg: dict,
         ai_layer: Any = None,           # Optional AIAdvisoryLayer instance
+        signal_filter: Any = None,      # Optional SignalQualityFilter instance
     ) -> None:
         self.settings = settings_cfg
         self.strategy_cfg = strategy_cfg
@@ -102,6 +104,7 @@ class DecisionEngine:
             min_confidence=settings_cfg.get("signal_aggregator", {}).get("min_confidence", 0.45)
         )
         self.last_no_trade: list[dict] = []
+        self.signal_filter: Optional[SignalQualityFilter] = signal_filter
 
         # Build strategy library
         scfg = strategy_cfg.get("strategies", {})
@@ -373,6 +376,25 @@ class DecisionEngine:
             final_action = "EXECUTE"
         else:
             final_action = "BLOCK"
+
+        # ---- Step 5: ML Signal Quality Filter ----
+        # Build features for ALL signals (stored in metadata for tracker on_open)
+        if self.signal_filter is not None:
+            try:
+                features = build_signal_features(signal, regime_str, df)
+                ml_score = self.signal_filter.score(features)
+                signal.metadata["ml_score"] = round(ml_score, 3)
+                signal.metadata["_signal_features"] = features
+                if final_action == "EXECUTE" and ml_score < self.signal_filter.threshold:
+                    final_action = "BLOCK"
+                    signal.approved = False
+                    signal.rejection_reason = f"ML filter: score={ml_score:.2f} < {self.signal_filter.threshold}"
+                    logger.info(
+                        "ML FILTER BLOCK: %s %s score=%.2f < %.2f",
+                        signal.asset, signal.signal.value, ml_score, self.signal_filter.threshold,
+                    )
+            except Exception as exc:
+                logger.debug("ML filter error for %s: %s", signal.asset, exc)
 
         # Stamp the signal
         signal.approved = final_action == "EXECUTE"

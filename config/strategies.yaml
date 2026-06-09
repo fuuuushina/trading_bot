@@ -189,10 +189,11 @@ strategies:
     macd_fast: 12
     macd_slow: 26
     macd_signal: 9
-    zero_line_filter: false         # désactivé — plus de signaux
-    min_confidence: 0.35
-    atr_multiplier_sl: 1.0
-    atr_multiplier_tp: 1.8
+    ema_trend_period: 21            # EMA alignment filter
+    min_hist_atr_ratio: 0.10        # |histogram| >= 10% ATR
+    min_confidence: 0.55            # was 0.35
+    atr_multiplier_sl: 1.5          # was 1.0
+    atr_multiplier_tp: 3.0          # was 1.8 → R:R = 2.0
 
 # ---- Regime-to-strategy mapping ----
 regime_strategy_map:
