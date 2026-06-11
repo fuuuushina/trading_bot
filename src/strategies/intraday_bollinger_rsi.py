@@ -54,6 +54,7 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
         rsi_ob       = cfg.get("rsi_overbought",   62)
         rsi_os       = cfg.get("rsi_oversold",     38)
         atr_sl_mult  = cfg.get("atr_multiplier_sl", 1.5)
+        atr_tp_mult  = cfg.get("atr_multiplier_tp", 4.5)
         min_conf     = cfg.get("min_confidence",   0.55)
 
         if len(df) < _MIN_BARS:
@@ -101,13 +102,13 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
         signal_type = SignalType.BUY if buy_signal else SignalType.SELL
 
         entry = c
-        # TP = basis (middle band) — natural mean reversion target
-        tp = bas_val
-        # SL = beyond the band by ATR×1.5
+        # TP = ATR × multiplicateur (R:R explicite, plus fiable que la bande médiane)
+        tp = self._atr_target(entry, atr_val, direction, atr_tp_mult)
+        # SL = beyond the band by ATR×sl_mult
         sl = entry - direction * atr_sl_mult * atr_val
         rr = self._rr_ratio(entry, sl, tp)
 
-        if rr is None or rr < 1.2:
+        if rr is None or rr < 1.5:
             return no_trade(self.name, asset, timeframe, self.horizon,
                             f"R:R {rr} below 1.2")
 

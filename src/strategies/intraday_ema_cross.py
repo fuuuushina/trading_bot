@@ -45,7 +45,7 @@ class IntradayEMACrossStrategy(BaseStrategy):
         ema_fast    = cfg.get("ema_fast",        9)
         ema_slow    = cfg.get("ema_slow",        21)
         atr_sl_mult = cfg.get("atr_multiplier_sl", 1.5)
-        atr_tp_mult = cfg.get("atr_multiplier_tp", 2.5)
+        atr_tp_mult = cfg.get("atr_multiplier_tp", 4.0)
         min_conf    = cfg.get("min_confidence",  0.55)
         rsi_period  = cfg.get("rsi_period",      14)
         allow_continuation = cfg.get("allow_continuation", True)

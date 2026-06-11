@@ -14,6 +14,7 @@ Live broker is a separate module requiring explicit unlock.
 from __future__ import annotations
 
 import logging
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -303,36 +304,69 @@ class PaperBroker:
         return filled
 
     def check_stops_and_targets(
-        self, current_prices: dict[str, float]
+        self,
+        current_prices: dict[str, float],
+        bar_highs: dict[str, float] | None = None,
+        bar_lows:  dict[str, float] | None = None,
+        max_hold_hours_intraday: float = 6.0,
     ) -> list[dict]:
         """
         Check open positions against stop-loss and take-profit levels.
-        Automatically closes positions that have hit their levels.
+        Uses bar HIGH/LOW (when provided) so intra-bar SL/TP are properly detected.
+        Priority: SL > TP (worst-case). Intraday positions auto-close after max_hold_hours_intraday.
         Returns list of auto-close events.
         """
         events = []
-        to_close: list[tuple[str, str, float]] = []  # (asset, reason, price)
+        to_close: list[tuple[str, str, float]] = []
 
-        for asset, pos in self._positions.items():
+        import math as _m
+        now = datetime.utcnow()
+
+        for asset, pos in list(self._positions.items()):
             price = current_prices.get(asset)
             if price is None:
+                continue
+            try:
+                price = float(price)
+            except Exception:
+                continue
+            if not _m.isfinite(price) or price <= 0:
                 continue
 
             pos.current_price = price
 
+            # Use bar high/low when available — catch intra-bar SL/TP touches
+            bar_high = bar_highs.get(asset, price) if bar_highs else price
+            bar_low  = bar_lows.get(asset, price)  if bar_lows  else price
+
             if pos.side == "long":
-                if pos.stop_loss and price <= pos.stop_loss:
-                    to_close.append((asset, "stop_loss", pos.stop_loss))
-                elif pos.take_profit and price >= pos.take_profit:
+                sl_hit = pos.stop_loss   and bar_low  <= pos.stop_loss
+                tp_hit = pos.take_profit and bar_high >= pos.take_profit
+                if sl_hit:
+                    to_close.append((asset, "stop_loss",   pos.stop_loss))
+                elif tp_hit:
                     to_close.append((asset, "take_profit", pos.take_profit))
             else:  # short
-                if pos.stop_loss and price >= pos.stop_loss:
-                    to_close.append((asset, "stop_loss", pos.stop_loss))
-                elif pos.take_profit and price <= pos.take_profit:
+                sl_hit = pos.stop_loss   and bar_high >= pos.stop_loss
+                tp_hit = pos.take_profit and bar_low  <= pos.take_profit
+                if sl_hit:
+                    to_close.append((asset, "stop_loss",   pos.stop_loss))
+                elif tp_hit:
                     to_close.append((asset, "take_profit", pos.take_profit))
 
-        for asset, reason, price in to_close:
-            event = self._close_position(asset, price, reason)
+            # Sortie temporelle : ferme les positions intraday après N heures
+            if asset not in [a for a, _, _ in to_close]:
+                if pos.horizon == "intraday" and max_hold_hours_intraday > 0:
+                    hold_hours = (now - pos.opened_at).total_seconds() / 3600
+                    if hold_hours >= max_hold_hours_intraday:
+                        logger.info(
+                            "Time-exit: %s held %.1fh >= %.1fh — closing at market",
+                            asset, hold_hours, max_hold_hours_intraday,
+                        )
+                        to_close.append((asset, "time_exit", price))
+
+        for asset, reason, close_price in to_close:
+            event = self._close_position(asset, close_price, reason)
             if event:
                 events.append(event)
 
@@ -340,11 +374,13 @@ class PaperBroker:
 
     def update_prices(self, current_prices: dict[str, float]) -> None:
         """Update mark-to-market prices without closing positions."""
+        import math
         for asset, pos in self._positions.items():
             if asset in current_prices:
-                pos.current_price = current_prices[asset]
-            # Always update unrealized PnL even if price wasn't fetched this cycle
-            # This forces recalculation based on current stored price
+                price = current_prices[asset]
+                # Skip NaN/inf prices (yfinance hors-session) — conserver le dernier prix valide
+                if price is not None and math.isfinite(float(price)) and float(price) > 0:
+                    pos.current_price = float(price)
 
     # ------------------------------------------------------------------ #
     # Portfolio state
@@ -429,7 +465,10 @@ class PaperBroker:
                         "side":          p.side,
                         "quantity":      p.quantity,
                         "avg_entry":     p.avg_entry_price,
-                        "current_price": p.current_price,
+                        "current_price": (
+                            p.current_price if math.isfinite(p.current_price)
+                            else p.avg_entry_price
+                        ),
                         "stop_loss":     p.stop_loss,
                         "take_profit":   p.take_profit,
                         "strategy":      p.strategy_name,
@@ -462,12 +501,19 @@ class PaperBroker:
             self._positions = {}
             for pos in data.get("positions", []):
                 opened = datetime.fromisoformat(pos["opened_at"]) if pos.get("opened_at") else datetime.utcnow()
+                avg_entry = float(pos["avg_entry"])
+                cur_price = pos.get("current_price")
+                try:
+                    _cp = float(cur_price)
+                    _cp = _cp if math.isfinite(_cp) and _cp > 0 else avg_entry
+                except (TypeError, ValueError):
+                    _cp = avg_entry
                 self._positions[pos["asset"]] = Position(
                     asset=pos["asset"],
                     side=pos["side"],
                     quantity=float(pos["quantity"]),
-                    avg_entry_price=float(pos["avg_entry"]),
-                    current_price=float(pos["current_price"]),
+                    avg_entry_price=avg_entry,
+                    current_price=_cp,
                     strategy_name=pos.get("strategy", "unknown"),
                     horizon=pos.get("horizon", "swing"),
                     stop_loss=pos.get("stop_loss"),
@@ -626,17 +672,20 @@ class PaperBroker:
         realized_pnl = direction * (fill_price - pos.avg_entry_price) * closed_qty - order.commission
 
         self._trade_history.append({
-            "asset": order.asset,
-            "strategy": order.strategy_name,
-            "horizon": order.horizon,
-            "side": pos.side,
-            "quantity": closed_qty,
-            "entry_price": pos.avg_entry_price,
-            "exit_price": fill_price,
-            "pnl": round(realized_pnl, 4),
-            "pnl_pct": round(realized_pnl / (pos.avg_entry_price * closed_qty), 4),
-            "commission": order.commission,
-            "closed_at": datetime.utcnow().isoformat(),
+            "asset":        order.asset,
+            "strategy":     order.strategy_name,
+            "horizon":      order.horizon,
+            "side":         pos.side,
+            "quantity":     closed_qty,
+            "entry_price":  pos.avg_entry_price,
+            "exit_price":   fill_price,
+            "stop_loss":    pos.stop_loss,
+            "take_profit":  pos.take_profit,
+            "close_reason": order.metadata.get("auto_close_reason", "signal"),
+            "pnl":          round(realized_pnl, 4),
+            "pnl_pct":      round(realized_pnl / (pos.avg_entry_price * closed_qty), 4),
+            "commission":   order.commission,
+            "closed_at":    datetime.utcnow().isoformat(),
         })
 
         if closed_qty >= pos.quantity:

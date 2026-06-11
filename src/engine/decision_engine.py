@@ -424,9 +424,15 @@ class DecisionEngine:
         ai: Optional[dict],
         regime: str,
     ) -> str:
+        def _sf(v, fmt=".2f") -> str:
+            try:
+                return format(float(v), fmt)
+            except Exception:
+                return "N/A"
+
         lines = [
             f"Strategy: {signal.strategy_name} | Asset: {signal.asset} | Regime: {regime}",
-            f"Signal: {signal.signal.value} | Confidence: {signal.confidence:.2f} | R:R: {signal.risk_reward}",
+            f"Signal: {signal.signal.value} | Confidence: {_sf(signal.confidence)} | R:R: {signal.risk_reward}",
             f"Signal reason: {signal.reason}",
             f"Rules: {rules.summary}",
         ]
@@ -434,10 +440,10 @@ class DecisionEngine:
             lines.append("Blocking rules: " + "; ".join(r.reason for r in rules.blocking_rules))
         if ai:
             lines.append(
-                f"AI: {ai.get('recommended_action')} | risk={ai.get('risk_score'):.2f} | "
-                f"opp={ai.get('opportunity_score'):.2f} | '{ai.get('summary', '')}'"
+                f"AI: {ai.get('recommended_action')} | risk={_sf(ai.get('risk_score'))} | "
+                f"opp={_sf(ai.get('opportunity_score'))} | '{ai.get('summary', '')}'"
             )
-        lines.append(f"Risk: {risk.decision.value} | Size: ${risk.approved_size_usd:.2f} | {risk.reason}")
+        lines.append(f"Risk: {risk.decision.value} | Size: ${_sf(risk.approved_size_usd)} | {risk.reason}")
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ #

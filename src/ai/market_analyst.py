@@ -279,20 +279,30 @@ class MarketAnalyst:
             )
 
         # FULL_STRATEGY
+        import math as _m
+
+        def _fv(v, default=0.0):
+            """Safe float: NaN/None/Inf → default."""
+            try:
+                v = float(v)
+                return v if _m.isfinite(v) else default
+            except Exception:
+                return default
+
         spy = snapshot.get("SPY") if snapshot else None
         return _FULL_STRATEGY_PROMPT.format(
             profile_json=json.dumps(profile_dict, indent=2, ensure_ascii=False)[:600],
             regime=regime,
             vix=f"{snapshot.vix_level:.1f}" if snapshot and snapshot.vix_level else "N/A",
-            spy_change_20d=spy.change_20d if spy else 0.0,
-            spy_vs_ma200=spy.price_vs_ma200_pct if spy else 0.0,
-            spy_rsi=spy.rsi14 if spy else 50.0,
-            spy_adx=spy.adx14 if spy else 20.0,
+            spy_change_20d=_fv(spy.change_20d) if spy else 0.0,
+            spy_vs_ma200=_fv(spy.price_vs_ma200_pct) if spy else 0.0,
+            spy_rsi=_fv(spy.rsi14, 50.0) if spy else 50.0,
+            spy_adx=_fv(spy.adx14, 20.0) if spy else 20.0,
             features_table=features_table,
             news_summary=news_summary or "(pas de news)",
-            capital=portfolio_state.get("total_capital", 0),
-            exposure=portfolio_state.get("total_exposure", 0) / max(portfolio_state.get("total_capital", 1), 1),
-            drawdown=portfolio_state.get("drawdown_pct", 0.0),
+            capital=_fv(portfolio_state.get("total_capital", 0)),
+            exposure=_fv(portfolio_state.get("total_exposure", 0)) / max(_fv(portfolio_state.get("total_capital", 1), 1), 1),
+            drawdown=_fv(portfolio_state.get("drawdown_pct", 0.0)),
             open_positions=portfolio_state.get("open_positions", 0),
         )
 
@@ -495,12 +505,24 @@ class MarketAnalyst:
     def _features_table(snapshot) -> str:
         if snapshot is None:
             return "(no data)"
+        import math as _m
+
+        def _sf(v, fmt: str) -> str:
+            try:
+                v = float(v)
+                return format(v if _m.isfinite(v) else 0.0, fmt)
+            except Exception:
+                return "?"
+
         rows = []
         for ticker, feat in list(snapshot.assets.items())[:8]:
-            rows.append(
-                f"{ticker:<8} close={feat.close:.2f} "
-                f"1d={feat.change_1d:+.1%} 20d={feat.change_20d:+.1%} "
-                f"RSI={feat.rsi14:.0f} ADX={feat.adx14:.0f} "
-                f"vs_MA200={feat.price_vs_ma200_pct:+.1%}"
-            )
+            try:
+                rows.append(
+                    f"{ticker:<8} close={_sf(feat.close, '.2f')} "
+                    f"1d={_sf(feat.change_1d, '+.1%')} 20d={_sf(feat.change_20d, '+.1%')} "
+                    f"RSI={_sf(feat.rsi14, '.0f')} ADX={_sf(feat.adx14, '.0f')} "
+                    f"vs_MA200={_sf(feat.price_vs_ma200_pct, '+.1%')}"
+                )
+            except Exception:
+                rows.append(f"{ticker:<8} (données indisponibles)")
         return "\n".join(rows)

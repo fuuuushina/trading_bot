@@ -103,12 +103,12 @@ strategies:
     enabled: true
     horizon: "swing"
     timeframe: "1d"
-    min_theme_score: 0.25          # Lowered — act on weaker sector signals too
-    min_confidence: 0.40
+    min_theme_score: 0.25
+    min_confidence: 0.45
     atr_sl_multiplier: 2.0
-    atr_tp_multiplier: 3.5
-    rsi_max_buy: 72                # Don't chase overbought entries
-    rsi_min_sell: 30               # Don't short oversold stocks
+    atr_tp_multiplier: 6.0         # R:R = 3.0 (6.0/2.0)
+    rsi_max_buy: 72
+    rsi_min_sell: 30
 
   # ---- EMA Cross Swing (Agressive — croisement EMA9/EMA21 daily) ----
   ema_cross_swing:
@@ -117,19 +117,19 @@ strategies:
     timeframe: "1d"
     ema_fast: 9
     ema_slow: 21
-    min_confidence: 0.35
+    min_confidence: 0.45
     atr_sl_multiplier: 2.0
-    atr_tp_multiplier: 3.0
+    atr_tp_multiplier: 6.0          # R:R = 3.0
 
   # ---- Momentum Burst (Agressive — momentum 5j + prix > EMA20) ----
   momentum_burst:
     enabled: true
     horizon: "swing"
     timeframe: "1d"
-    min_return_5d: 0.002             # +0.2% sur 5 jours minimum
-    min_confidence: 0.35
+    min_return_5d: 0.002
+    min_confidence: 0.45
     atr_sl_multiplier: 1.8
-    atr_tp_multiplier: 2.8
+    atr_tp_multiplier: 5.4          # R:R = 3.0 (5.4/1.8)
 
   # ---- Intraday Forex Strategies (EUR/USD 5min) ----
   intraday_ema_cross:
@@ -140,9 +140,9 @@ strategies:
     ema_slow: 21
     allow_continuation: true
     rsi_period: 14
-    min_confidence: 0.48           # Abaissé de 0.55 — continuation score démarre à 0.50
+    min_confidence: 0.55
     atr_multiplier_sl: 1.5
-    atr_multiplier_tp: 2.5
+    atr_multiplier_tp: 4.5         # R:R = 3.0 — break-even à 25% WR
 
   intraday_bollinger_rsi:
     enabled: true
@@ -151,20 +151,21 @@ strategies:
     bb_period: 20
     bb_mult: 2.0
     rsi_period: 14
-    rsi_overbought: 62             # Relaxé de 65
-    rsi_oversold: 38               # Relaxé de 35
-    min_confidence: 0.48           # Abaissé de 0.55
+    rsi_overbought: 62
+    rsi_oversold: 38
+    min_confidence: 0.55
     atr_multiplier_sl: 1.5
+    atr_multiplier_tp: 4.5         # R:R = 3.0
 
   intraday_session_breakout:
     enabled: true
     horizon: "intraday"
     timeframe: "5m"
-    consolidation_bars: 24         # 2h pre-session range
-    atr_buffer_mult: 0.3           # breakout confirmation buffer
-    min_confidence: 0.35           # Ultra-relaxé
+    consolidation_bars: 24
+    atr_buffer_mult: 0.3
+    min_confidence: 0.50
     atr_multiplier_sl: 1.8
-    atr_multiplier_tp: 3.0
+    atr_multiplier_tp: 5.4         # R:R = 3.0 (5.4/1.8)
 
   # ---- Intraday Trend Scalp (EMA9/21/50 avec filtres qualité stricts) ----
   intraday_trend_scalp:
@@ -174,10 +175,10 @@ strategies:
     ema_fast: 9
     ema_slow: 21
     ema_medium: 50
-    min_confidence: 0.45
-    atr_multiplier_sl: 1.5   # SL large = moins de faux stops
-    atr_multiplier_tp: 3.0   # TP 2× SL → R:R = 2.0
-    min_sep_atr_ratio: 0.30  # spread EMA >= 30% ATR
+    min_confidence: 0.55
+    atr_multiplier_sl: 1.5
+    atr_multiplier_tp: 4.5   # R:R = 3.0
+    min_sep_atr_ratio: 0.30
     rsi_low: 40
     rsi_high: 68
 
@@ -189,11 +190,11 @@ strategies:
     macd_fast: 12
     macd_slow: 26
     macd_signal: 9
-    ema_trend_period: 21            # EMA alignment filter
-    min_hist_atr_ratio: 0.10        # |histogram| >= 10% ATR
-    min_confidence: 0.55            # was 0.35
-    atr_multiplier_sl: 1.5          # was 1.0
-    atr_multiplier_tp: 3.0          # was 1.8 → R:R = 2.0
+    ema_trend_period: 21
+    min_hist_atr_ratio: 0.10
+    min_confidence: 0.55
+    atr_multiplier_sl: 1.5
+    atr_multiplier_tp: 4.5          # R:R = 3.0
 
 # ---- Regime-to-strategy mapping ----
 regime_strategy_map:

@@ -226,7 +226,11 @@ class RiskManager:
             decision=decision,
             approved_size_usd=round(size_usd, 2),
             approved_shares=round(shares, 4),
-            reason=f"{'Reduced: ' if reduced else ''}Approved — R:R={signal.risk_reward}, conf={signal.confidence:.2f}",
+            reason=(
+                f"{'Reduced: ' if reduced else ''}Approved — R:R={signal.risk_reward}, "
+                f"conf={signal.confidence:.2f}" if signal.confidence is not None
+                else f"{'Reduced: ' if reduced else ''}Approved — R:R={signal.risk_reward}"
+            ),
             details={
                 "total_capital": total_capital,
                 "daily_pnl_pct": round(self._daily_pnl / (total_capital + 1e-10), 4),

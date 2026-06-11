@@ -20,7 +20,7 @@ SECTOR_UNIVERSE: dict[str, dict] = {
     "ai_software": {
         "label": "IA & Logiciel",
         "description": "Intelligence artificielle, logiciels, cloud",
-        "tickers": ["MSFT", "GOOGL", "META", "CRM", "PLTR", "SNOW", "NOW", "AAPL"],
+        "tickers": ["MSFT", "GOOGL", "META", "CRM", "PLTR", "SNOW", "NOW", "AAPL", "NFLX"],
         "keywords": [
             "ai", "artificial intelligence", "cloud", "software", "saas", "llm",
             "chatgpt", "openai", "microsoft", "google", "meta", "machine learning",
@@ -30,7 +30,7 @@ SECTOR_UNIVERSE: dict[str, dict] = {
     "semiconductors": {
         "label": "Semi-conducteurs",
         "description": "Semi-conducteurs, puces électroniques",
-        "tickers": ["NVDA", "AMD", "AVGO", "QCOM", "AMAT", "INTC", "MU", "ASML"],
+        "tickers": ["NVDA", "AMD", "AVGO", "QCOM", "AMAT", "INTC", "MU", "ASML", "ARM", "SMCI"],
         "keywords": [
             "chip", "semiconductor", "gpu", "nvidia", "amd", "wafer", "fab",
             "export control", "broadcom", "qualcomm", "intel", "memory", "hbm",
@@ -39,7 +39,7 @@ SECTOR_UNIVERSE: dict[str, dict] = {
     "energy": {
         "label": "Énergie",
         "description": "Énergie, pétrole, gaz naturel",
-        "tickers": ["XOM", "CVX", "COP", "SLB", "OXY", "PSX", "MPC"],
+        "tickers": ["XOM", "CVX", "COP", "SLB", "OXY", "PSX", "MPC", "XLE"],
         "keywords": [
             "oil", "gas", "opec", "crude", "energy", "petroleum", "refinery",
             "barrel", "brent", "wti", "exxon", "chevron", "shell",
@@ -47,12 +47,12 @@ SECTOR_UNIVERSE: dict[str, dict] = {
     },
     "fintech_banking": {
         "label": "Finance & Banque",
-        "description": "Finance, banques, paiements",
-        "tickers": ["JPM", "GS", "MS", "V", "MA", "BAC", "WFC", "AXP"],
+        "description": "Finance, banques, paiements, crypto institutionnel",
+        "tickers": ["JPM", "GS", "MS", "V", "MA", "BAC", "WFC", "AXP", "COIN", "MSTR"],
         "keywords": [
             "bank", "fed", "federal reserve", "rate", "financial", "payment",
             "fintech", "lending", "credit", "jpmorgan", "goldman", "interest rate",
-            "yield", "bond",
+            "yield", "bond", "bitcoin", "crypto", "coinbase", "microstrategy",
         ],
     },
     "ev_clean_energy": {
@@ -76,8 +76,8 @@ SECTOR_UNIVERSE: dict[str, dict] = {
     },
     "retail_consumer": {
         "label": "Distribution & Conso",
-        "description": "Distribution, consommation, e-commerce",
-        "tickers": ["AMZN", "WMT", "COST", "TGT", "HD", "NKE", "MCD"],
+        "description": "Distribution, consommation, e-commerce, global",
+        "tickers": ["AMZN", "WMT", "COST", "TGT", "HD", "NKE", "MCD", "BABA"],
         "keywords": [
             "retail", "consumer", "spending", "shopping", "ecommerce", "amazon",
             "walmart", "costco", "inflation", "consumer confidence", "gdp",

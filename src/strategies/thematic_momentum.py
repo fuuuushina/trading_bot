@@ -95,9 +95,9 @@ class ThematicMomentumStrategy(BaseStrategy):
             return no_trade(self.name, asset, timeframe, self.horizon,
                             "Asset not in any tracked sector")
 
-        # If no theme scores loaded yet (Groq unavailable / first cycle), use a
-        # mild default positive score so technical filters can still fire.
-        if not self._theme_scores:
+        # Fallback: if scores absent OR all neutral (Groq hasn't fired yet / no news),
+        # use a mild default so technical filters can still fire.
+        if not self._theme_scores or all(abs(v) < 0.05 for v in self._theme_scores.values()):
             theme_score = 0.30
 
         if abs(theme_score) < min_theme:

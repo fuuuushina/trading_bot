@@ -115,10 +115,17 @@ class StatisticalRules:
     def check_volatility_acceptable(
         self, df: pd.DataFrame, signal: Signal
     ) -> RuleResult:
+        import math as _m
         name = "volatility_acceptable"
         atr_val = atr(df, 14).iloc[-1]
         price = float(df["close"].iloc[-1])
-        atr_pct = atr_val / price
+
+        # Guard NaN/inf (yfinance returns NaN for incomplete bars or pre-market)
+        if not _m.isfinite(float(atr_val)) or not _m.isfinite(price) or price <= 0:
+            return RuleResult(name, True, "ATR data unavailable — volatility check skipped",
+                              severity="block")
+
+        atr_pct = float(atr_val) / price
 
         # Block if ATR > 8% of price (extreme volatility for equity)
         max_atr_pct = 0.08

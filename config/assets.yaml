@@ -18,12 +18,12 @@ assets:
     max_margin_pct: 0.10   # 10% capital = $200 margin @ $2000 = $10k notional
     data_interval: "5m"
     data_period: "5d"
-    min_confidence: 0.45
+    min_confidence: 0.55
 
   GBPUSD=X:
     name: "GBP/USD"
     type: forex
-    enabled: true
+    enabled: false   # désactivé : 0% win rate (0/7 trades) — réactiver après amélioration signaux
     leverage: 50
     strategies:
       - intraday_trend_scalp
@@ -33,7 +33,7 @@ assets:
     max_margin_pct: 0.10
     data_interval: "5m"
     data_period: "5d"
-    min_confidence: 0.45
+    min_confidence: 0.60
 
   AUDUSD=X:
     name: "AUD/USD"
@@ -47,7 +47,7 @@ assets:
     max_margin_pct: 0.08
     data_interval: "5m"
     data_period: "5d"
-    min_confidence: 0.48
+    min_confidence: 0.55
 
   NZDUSD=X:
     name: "NZD/USD"
@@ -93,7 +93,7 @@ assets:
   GC=F:
     name: "Gold Futures"
     type: commodity
-    enabled: true
+    enabled: false   # désactivé : 17% win rate (1/6 trades)
     leverage: 20
     strategies:
       - intraday_trend_scalp
@@ -102,4 +102,4 @@ assets:
     max_margin_pct: 0.08
     data_interval: "5m"
     data_period: "5d"
-    min_confidence: 0.48
+    min_confidence: 0.55

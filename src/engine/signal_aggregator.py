@@ -248,18 +248,21 @@ class SignalAggregator:
             )
             return None
 
-        # Meilleurs paramètres prix : entry=moyenne, SL=le plus conservateur, TP=le plus ambitieux
+        # Meilleurs paramètres prix : entry=moyenne, SL=le plus large (conservateur), TP=le plus ambitieux
         entry_prices = [s.entry_price for s in dominant_signals if s.entry_price]
         stop_losses  = [s.stop_loss  for s in dominant_signals if s.stop_loss]
         take_profits = [s.take_profit for s in dominant_signals if s.take_profit]
 
         entry = sum(entry_prices) / len(entry_prices) if entry_prices else None
-        # Pour les BUY : SL le plus haut = le plus conservateur ; pour SELL : SL le plus bas
+        # BUY (long)  : SL est sous l'entrée → le plus large = le plus bas  → min()
+        #               TP est au-dessus      → le plus ambitieux = le plus haut → max()
+        # SELL (short): SL est au-dessus      → le plus large = le plus haut → max()
+        #               TP est dessous        → le plus ambitieux = le plus bas  → min()
         if dominant_action == SignalType.BUY:
-            sl = max(stop_losses) if stop_losses else None
+            sl = min(stop_losses)  if stop_losses  else None
             tp = max(take_profits) if take_profits else None
         else:
-            sl = min(stop_losses) if stop_losses else None
+            sl = max(stop_losses)  if stop_losses  else None
             tp = min(take_profits) if take_profits else None
 
         rr = None

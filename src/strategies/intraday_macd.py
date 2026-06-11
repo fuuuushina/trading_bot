@@ -40,7 +40,7 @@ class IntradayMACDStrategy(BaseStrategy):
         slow_p           = cfg.get("macd_slow",            26)
         sig_p            = cfg.get("macd_signal",           9)
         atr_sl_mult      = cfg.get("atr_multiplier_sl",    1.5)
-        atr_tp_mult      = cfg.get("atr_multiplier_tp",    3.0)
+        atr_tp_mult      = cfg.get("atr_multiplier_tp",    4.0)
         min_conf         = cfg.get("min_confidence",       0.50)
         ema_period       = cfg.get("ema_trend_period",     21)
         min_hist_ratio   = cfg.get("min_hist_atr_ratio",   0.10)  # |hist| >= 10% ATR

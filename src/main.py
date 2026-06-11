@@ -24,7 +24,15 @@ import time
 from pathlib import Path
 
 # Ensure project root is on path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+_PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+
+# Load .env before any module reads os.environ (GROQ_API_KEY, etc.)
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(_PROJECT_ROOT / ".env")
+except ImportError:
+    pass
 
 from config.loader import get_profile_config, get_risk_config, get_settings, get_strategy_config, is_live_enabled
 from src.monitoring.logger import AuditLogger, AlertDispatcher, DailyReporter, configure_logging

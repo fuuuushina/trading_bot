@@ -60,24 +60,24 @@ ASSETS_FILE       = PROJECT_ROOT / "config" / "assets.yaml"
 REFRESH_MS = 15_000
 
 # ── Palettes ──────────────────────────────────────────────────────────────────
-C_BG     = "#f0f4f8"
-C_PANEL  = "#ffffff"
-C_BORDER = "#e2e8f0"
-C_TEXT   = "#1a202c"
-C_MUTED  = "#718096"
-C_ACCENT = "#3182ce"
-C_GREEN  = "#38a169"
-C_RED    = "#e53e3e"
-C_ORANGE = "#dd6b20"
-C_YELLOW = "#d69e2e"
-C_PURPLE = "#805ad5"
-C_TEAL   = "#319795"
-C_ALPACA = "#7c3aed"
+C_BG     = "#F5F4F0"   # Washi — warm paper off-white
+C_PANEL  = "#FEFEFE"   # Near-white cards
+C_BORDER = "#E8E6E1"   # Subtle divider
+C_TEXT   = "#1A1916"   # Sumi ink (warm black)
+C_MUTED  = "#8C8A84"   # Stone grey
+C_ACCENT = "#375F7A"   # Deep water blue
+C_GREEN  = "#357A52"   # Forest (matcha-iro)
+C_RED    = "#A83C3C"   # Lacquer red
+C_ORANGE = "#A8712A"   # Amber (kohaku)
+C_YELLOW = "#8E7A32"   # Gold (kin)
+C_PURPLE = "#5E5496"   # Indigo (ai-iro)
+C_TEAL   = "#317070"   # Sea (seiheki)
+C_ALPACA = "#5E5496"   # Indigo
 
 REGIME_COLOR = {
     "bull_trend": C_GREEN, "bear_trend": C_RED, "range": C_YELLOW,
-    "high_volatility": C_ORANGE, "low_volatility": C_TEAL, "panic": "#742a2a",
-    "euphoric": "#97266d", "compression": C_PURPLE,
+    "high_volatility": C_ORANGE, "low_volatility": C_TEAL, "panic": "#6A2A2A",
+    "euphoric": "#7A3A60", "compression": C_PURPLE,
     "breakout_expansion": C_ACCENT, "unknown": C_MUTED,
 }
 REGIME_ICON = {
@@ -90,58 +90,58 @@ RISK_COLOR = {"low": C_GREEN, "medium": C_YELLOW, "high": C_ORANGE, "extreme": C
 STRATEGY_INFO = {
     # ── Swing / Actions ─────────────────────────────────────────────────────
     "trend_following": {
-        "name": "Tendance (EMA)", "icon": "↗", "color": "#38a169",
+        "name": "Tendance (EMA)", "icon": "↗", "color": "#357A52",
         "desc": "Achète sur une tendance haussière confirmée : EMA20 > EMA50 > EMA200 + ADX ≥ 15. Stop/TP basés sur l'ATR.",
         "when": "Bull trend / Breakout / Unknown",
     },
     "breakout": {
-        "name": "Cassure N-jours", "icon": "▲", "color": "#3182ce",
+        "name": "Cassure N-jours", "icon": "▲", "color": "#375F7A",
         "desc": "Entre sur une cassure du plus haut ou plus bas sur 20 jours, alignée avec l'EMA200. Capture les grandes tendances.",
         "when": "Bull trend / Breakout expansion",
     },
     "rsi_dip_buyer": {
-        "name": "Dip RSI(2)", "icon": "↩", "color": "#805ad5",
+        "name": "Dip RSI(2)", "icon": "↩", "color": "#5E5496",
         "desc": "Achète quand le RSI(2) passe sous 20 (survente court terme) au-dessus de la SMA200. Pari sur un rebond rapide.",
         "when": "Range / Bull trend / Unknown",
     },
     "thematic_momentum": {
-        "name": "Momentum Sectoriel", "icon": "🏭", "color": "#dd6b20",
+        "name": "Momentum Sectoriel", "icon": "🏭", "color": "#A8712A",
         "desc": "Analyse les news par secteur via Groq LLM → achète les actions des secteurs haussiers identifiés (pharma, IA, semi…).",
         "when": "Tous régimes (score secteur > 0.25)",
     },
     "ema_cross_swing": {
-        "name": "EMA Cross Rapide", "icon": "⚡", "color": "#e53e3e",
+        "name": "EMA Cross Rapide", "icon": "⚡", "color": "#A83C3C",
         "desc": "Achete des que EMA9 passe au-dessus de EMA21 (daily). Tres reactif, se declenche sur n'importe quel changement de tendance court terme.",
         "when": "Tous regimes sauf panique",
     },
     "momentum_burst": {
-        "name": "Momentum Burst", "icon": "🚀", "color": "#dd6b20",
+        "name": "Momentum Burst", "icon": "🚀", "color": "#A8712A",
         "desc": "Achete les actions avec momentum positif sur 5 jours (prix > EMA20 + retour > 0.5%). Capture les hausses rapides.",
         "when": "Tous regimes sauf panique",
     },
     # ── Intraday Forex ───────────────────────────────────────────────────────
     "intraday_ema_cross": {
-        "name": "Croisement EMA (Forex)", "icon": "✕", "color": "#3182ce",
+        "name": "Croisement EMA (Forex)", "icon": "✕", "color": "#375F7A",
         "desc": "Achète EUR/USD quand l'EMA 9 passe au-dessus de l'EMA 21 sur 5 min. Idéal en marché directionnel.",
         "when": "Tous régimes sauf panique (lun-ven)",
     },
     "intraday_bollinger_rsi": {
-        "name": "Bollinger + RSI (Forex)", "icon": "〜", "color": "#805ad5",
+        "name": "Bollinger + RSI (Forex)", "icon": "〜", "color": "#5E5496",
         "desc": "Achète EUR/USD quand le prix touche la bande basse Bollinger ET RSI < 35. Retour à la moyenne. Idéal en range.",
         "when": "Range / Basse volatilité (lun-ven)",
     },
     "intraday_session_breakout": {
-        "name": "Cassure de Session (Forex)", "icon": "▶", "color": "#38a169",
+        "name": "Cassure de Session (Forex)", "icon": "▶", "color": "#357A52",
         "desc": "Entre dans le sens de la cassure du range pré-session. Londres 07h-09h30 UTC, New York 13h30-16h UTC.",
         "when": "Ouverture London / NY (lun-ven)",
     },
     "intraday_trend_scalp": {
-        "name": "Trend Scalp Multi-assets", "icon": "TS", "color": "#319795",
+        "name": "Trend Scalp Multi-assets", "icon": "TS", "color": "#317070",
         "desc": "Scalpe la tendance courte sur les instruments intraday geres par l'orchestrator : forex, crypto et or.",
         "when": "Forex / crypto / or, 5min",
     },
     "intraday_macd": {
-        "name": "MACD Intraday", "icon": "M", "color": "#dd6b20",
+        "name": "MACD Intraday", "icon": "M", "color": "#A8712A",
         "desc": "Confirme les impulsions intraday avec croisement MACD, momentum et filtres de confiance par asset.",
         "when": "Forex / crypto / or, 5min",
     },
@@ -156,7 +156,11 @@ TABS = [
     ("regime",     "Regime et IA"),
     ("analyse",    "Analyse Groq"),
     ("themes",     "Themes & Secteurs"),
+    ("metrics",    "Metriques & ML"),
 ]
+
+_BROKER_STATE_FILE = PROJECT_ROOT / "data" / "paper_trading" / "broker_state.json"
+_PERF_TRACKER_FILE = PROJECT_ROOT / "data" / "models" / "performance_tracker.json"
 
 ASSET_DISPLAY_ORDER = ["EURUSD=X", "GBPUSD=X", "AUDUSD=X", "BTC-USD", "ETH-USD", "GC=F"]
 ASSET_DISPLAY_NAME = {
@@ -202,6 +206,27 @@ def read_alpaca_state() -> dict:
     except Exception:
         pass
     return {}
+
+
+def read_broker_state() -> dict:
+    try:
+        if _BROKER_STATE_FILE.exists():
+            with open(_BROKER_STATE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def read_perf_tracker() -> list:
+    try:
+        if _PERF_TRACKER_FILE.exists():
+            with open(_PERF_TRACKER_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+    except Exception:
+        pass
+    return []
 
 
 def read_assets_config() -> dict:
@@ -519,21 +544,25 @@ def kpi_card(label: str, value: str, subtitle: str = "",
     label_el = tip(label, tooltip) if tooltip else html.Span(label)
     children = [
         html.Div(label_el, style={
-            "fontSize": "11px", "fontWeight": "700", "color": C_MUTED,
-            "textTransform": "uppercase", "letterSpacing": "0.5px",
+            "fontSize": "10px", "fontWeight": "600", "color": C_MUTED,
+            "textTransform": "uppercase", "letterSpacing": "0.08em",
         }),
         html.Div(str(value), style={
-            "fontSize": "22px", "fontWeight": "800", "color": color,
-            "marginTop": "5px", "lineHeight": "1.15", "wordBreak": "break-word",
+            "fontSize": "21px", "fontWeight": "700", "color": color,
+            "marginTop": "6px", "lineHeight": "1.2", "wordBreak": "break-word",
+            "fontVariantNumeric": "tabular-nums",
         }),
     ]
     if subtitle:
         children.append(html.Div(str(subtitle),
-                                 style={"fontSize": "12px", "color": C_MUTED, "marginTop": "3px"}))
+                                 style={"fontSize": "11px", "color": C_MUTED, "marginTop": "4px",
+                                        "letterSpacing": "0.02em"}))
     return html.Div(children, style={
-        "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "10px", "padding": "14px 16px",
-        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)",
+        "background": C_PANEL,
+        "border": f"1px solid {C_BORDER}",
+        "borderRadius": "8px", "padding": "16px 18px",
+        "boxShadow": "0 1px 4px rgba(26,25,22,0.05)",
+        "transition": "box-shadow 0.2s ease",
     })
 
 
@@ -541,29 +570,30 @@ def badge(text: str, color: str = C_ACCENT, bg: str = "") -> html.Span:
     bg_col = bg or f"{color}18"
     return html.Span(str(text), style={
         "background": bg_col, "color": color,
-        "borderRadius": "999px", "fontSize": "11px", "fontWeight": "800",
-        "padding": "3px 10px",
+        "borderRadius": "4px", "fontSize": "10px", "fontWeight": "700",
+        "padding": "3px 9px", "letterSpacing": "0.06em",
+        "textTransform": "uppercase",
     })
 
 
 def signal_badge_el(sig: str) -> html.Span:
     sig = str(sig).upper()
     colors = {
-        "BUY": (C_GREEN, "#f0fff4"), "SELL": (C_RED, "#fff5f5"),
-        "EXECUTE": (C_GREEN, "#f0fff4"), "BLOCK": (C_ORANGE, "#fffaf0"),
-        "NO_TRADE": (C_MUTED, "#f7fafc"), "HOLD": (C_YELLOW, "#fffff0"),
+        "BUY": (C_GREEN, "#EEF5EE"), "SELL": (C_RED, "#F5EEEE"),
+        "EXECUTE": (C_GREEN, "#EEF5EE"), "BLOCK": (C_ORANGE, "#F5F2EA"),
+        "NO_TRADE": (C_MUTED, "#F4F3EF"), "HOLD": (C_YELLOW, "#F5F2E7"),
     }
-    c, bg = colors.get(sig, (C_MUTED, "#f7fafc"))
+    c, bg = colors.get(sig, (C_MUTED, "#F4F3EF"))
     return badge(sig, c, bg)
 
 
 def section_header(title: str, color: str = C_ACCENT) -> html.Div:
     return html.Div(title, style={
-        "fontSize": "13px", "fontWeight": "900", "color": color,
-        "textTransform": "uppercase", "letterSpacing": "0.8px",
+        "fontSize": "11px", "fontWeight": "700", "color": color,
+        "textTransform": "uppercase", "letterSpacing": "0.1em",
         "padding": "10px 0 8px",
-        "borderBottom": f"2px solid {color}30",
-        "marginBottom": "12px", "marginTop": "20px",
+        "borderBottom": f"1px solid {color}28",
+        "marginBottom": "14px", "marginTop": "22px",
     })
 
 
@@ -591,17 +621,22 @@ def _chart_base() -> dict:
     return dict(
         template="plotly_white", paper_bgcolor=C_PANEL, plot_bgcolor=C_PANEL,
         font={"family": "Inter, system-ui, sans-serif", "size": 11, "color": C_TEXT},
-        margin={"l": 55, "r": 15, "t": 35, "b": 35},
-        xaxis={"showgrid": False, "zeroline": False},
-        yaxis={"gridcolor": "#edf2f7", "zeroline": False},
+        margin={"l": 55, "r": 15, "t": 30, "b": 30},
+        xaxis={"showgrid": False, "zeroline": False,
+               "tickfont": {"size": 10, "color": C_MUTED},
+               "linecolor": C_BORDER},
+        yaxis={"gridcolor": "#ECEAE4", "zeroline": False,
+               "tickfont": {"size": 10, "color": C_MUTED},
+               "linecolor": C_BORDER},
     )
 
 
 def card_wrap(children, border_color: str = C_BORDER, padding: str = "16px 18px") -> html.Div:
     return html.Div(children, style={
         "background": C_PANEL, "border": f"1px solid {border_color}",
-        "borderRadius": "10px", "padding": padding,
-        "boxShadow": "0 1px 3px rgba(0,0,0,0.06)", "marginBottom": "14px",
+        "borderRadius": "8px", "padding": padding,
+        "boxShadow": "0 1px 4px rgba(26,25,22,0.05)", "marginBottom": "14px",
+        "transition": "box-shadow 0.2s ease",
     })
 
 
@@ -614,6 +649,18 @@ def grid2(left, right, left_width: str = "1fr", right_width: str = "220px") -> h
 
 
 # ── Helpers dashboard multi-assets ────────────────────────────────────────────
+def _pv(v, default=0.0):
+    """Safe numeric value: None / NaN / Inf → default.
+    dict.get(key, default) returns None when key exists with null value —
+    use _pv(d.get(key), default) to handle both missing and null keys."""
+    import math as _m
+    try:
+        f = float(v)
+        return f if _m.isfinite(f) else default
+    except Exception:
+        return default
+
+
 def fmt_money(value: float, decimals: int = 0) -> str:
     try:
         return f"${float(value):,.{decimals}f}"
@@ -687,7 +734,7 @@ def system_update_panel(state: dict, compact: bool = False) -> html.Div:
             }),
         ], style={
             "border": f"1px solid {C_BORDER}", "borderRadius": "8px",
-            "padding": "10px 12px", "background": "#f8fafc",
+            "padding": "10px 12px", "background": "#F4F3EF",
         })
         for title, value, desc in SYSTEM_UPDATE_CARDS
     ]
@@ -704,7 +751,7 @@ def system_update_panel(state: dict, compact: bool = False) -> html.Div:
                     style={"fontSize": "13px", "color": C_TEXT, "marginTop": "4px", "fontWeight": "700"},
                 ),
             ]),
-            badge("Redemarrage requis", C_ORANGE, "#fffaf0"),
+            badge("Redemarrage requis", C_ORANGE, "#F5F2EA"),
         ], style={"display": "flex", "justifyContent": "space-between",
                   "gap": "12px", "alignItems": "start", "marginBottom": "12px"}),
 
@@ -719,7 +766,7 @@ def system_update_panel(state: dict, compact: bool = False) -> html.Div:
                 style={"fontSize": "13px", "color": C_TEXT, "lineHeight": "1.55"},
             ),
         ], style={
-            "background": "#fffaf0", "border": f"1px solid {C_ORANGE}30",
+            "background": "#F5F2EA", "border": f"1px solid {C_ORANGE}30",
             "borderRadius": "8px", "padding": "10px 12px", "marginBottom": "12px",
         }),
 
@@ -774,13 +821,13 @@ def asset_registry_panel(state: dict, compact: bool = False) -> html.Div:
             data=rows,
             page_size=6,
             style_table={"overflowX": "auto"},
-            style_header={"backgroundColor": "#ebf8ff", "fontWeight": "800",
+            style_header={"backgroundColor": "#EDF2F6", "fontWeight": "800",
                           "fontSize": "11px", "border": f"1px solid {C_ACCENT}20"},
             style_cell={"fontSize": "12px", "padding": "7px 10px",
                         "fontFamily": "Inter, sans-serif", "whiteSpace": "normal",
                         "height": "auto"},
             style_data_conditional=[
-                {"if": {"row_index": "odd"}, "backgroundColor": "#f7fbff"},
+                {"if": {"row_index": "odd"}, "backgroundColor": "#EFF4F8"},
                 {"if": {"column_id": "notional"}, "fontWeight": "800", "color": C_ACCENT},
                 {"if": {"column_id": "margin"}, "fontWeight": "800"},
             ],
@@ -808,7 +855,7 @@ def equity_chart(history: list[dict], initial: float,
         name="Equite",
         hovertemplate="%{y:$,.2f}<extra></extra>",
     ))
-    fig.add_hline(y=initial, line_dash="dash", line_color="#a0aec0", line_width=1,
+    fig.add_hline(y=initial, line_dash="dash", line_color="#A0A09A", line_width=1,
                   annotation_text=f"Depart ${initial:,.0f}",
                   annotation_font_color=C_MUTED)
     fig.update_layout(title=title, height=250, showlegend=False, **_chart_base())
@@ -845,9 +892,9 @@ def eurusd_chart(
             fill="toself", fillcolor="rgba(49,130,206,0.07)",
             line={"color": "rgba(0,0,0,0)"}, showlegend=False, hoverinfo="skip",
         ), row=1, col=1)
-        fig.add_trace(go.Scatter(x=times, y=bbu, line={"color": "#3182ce", "width": 0.9, "dash": "dot"},
+        fig.add_trace(go.Scatter(x=times, y=bbu, line={"color": "#375F7A", "width": 0.9, "dash": "dot"},
                                  showlegend=False, hovertemplate="%{y:.5f}<extra>BB+</extra>"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=times, y=bbl, line={"color": "#3182ce", "width": 0.9, "dash": "dot"},
+        fig.add_trace(go.Scatter(x=times, y=bbl, line={"color": "#375F7A", "width": 0.9, "dash": "dot"},
                                  showlegend=False, hovertemplate="%{y:.5f}<extra>BB-</extra>"), row=1, col=1)
 
     fig.add_trace(go.Candlestick(
@@ -858,10 +905,10 @@ def eurusd_chart(
     ), row=1, col=1)
 
     if any(v is not None for v in e9v):
-        fig.add_trace(go.Scatter(x=times, y=e9v, line={"color": "#e53e3e", "width": 1.5},
+        fig.add_trace(go.Scatter(x=times, y=e9v, line={"color": "#A83C3C", "width": 1.5},
                                  name="EMA 9", hovertemplate="%{y:.5f}<extra>EMA9</extra>"), row=1, col=1)
     if any(v is not None for v in e21v):
-        fig.add_trace(go.Scatter(x=times, y=e21v, line={"color": "#3182ce", "width": 1.5},
+        fig.add_trace(go.Scatter(x=times, y=e21v, line={"color": "#375F7A", "width": 1.5},
                                  name="EMA 21", hovertemplate="%{y:.5f}<extra>EMA21</extra>"), row=1, col=1)
 
     # Plage de temps des bougies — ne tracer les marqueurs que dans cette fenêtre
@@ -904,22 +951,22 @@ def eurusd_chart(
         if buy_t:
             fig.add_trace(go.Scatter(
                 x=buy_t, y=buy_p, mode="markers",
-                marker={"symbol": "triangle-up", "size": 14, "color": "#38a169",
+                marker={"symbol": "triangle-up", "size": 14, "color": "#357A52",
                         "line": {"color": "#fff", "width": 1}},
                 name="Achat", hovertext=buy_lbl, hoverinfo="text",
             ), row=1, col=1)
         if sell_t:
             fig.add_trace(go.Scatter(
                 x=sell_t, y=sell_p, mode="markers",
-                marker={"symbol": "triangle-down", "size": 14, "color": "#e53e3e",
+                marker={"symbol": "triangle-down", "size": 14, "color": "#A83C3C",
                         "line": {"color": "#fff", "width": 1}},
                 name="Vente", hovertext=sell_lbl, hoverinfo="text",
             ), row=1, col=1)
         if close_t:
             fig.add_trace(go.Scatter(
                 x=close_t, y=close_p, mode="markers",
-                marker={"symbol": "circle-open", "size": 10, "color": "#805ad5",
-                        "line": {"color": "#805ad5", "width": 2}},
+                marker={"symbol": "circle-open", "size": 10, "color": "#5E5496",
+                        "line": {"color": "#5E5496", "width": 2}},
                 name="Clôture", hovertext=close_lbl, hoverinfo="text",
             ), row=1, col=1)
 
@@ -930,7 +977,7 @@ def eurusd_chart(
         tp    = open_position.get("take_profit")
         side  = open_position.get("side", "long")
         opened = str(open_position.get("opened_at", ""))[:19]
-        entry_color = "#38a169" if side == "long" else "#e53e3e"
+        entry_color = "#357A52" if side == "long" else "#A83C3C"
 
         # Lignes horizontales via add_shape (plus stable que add_hline avec subplots)
         yref = "y"
@@ -945,20 +992,20 @@ def eurusd_chart(
         if sl:
             sl = float(sl)
             fig.add_shape(type="line", x0=t_start, x1=t_end, y0=sl, y1=sl,
-                          line={"color": "#e53e3e", "width": 1, "dash": "dot"},
+                          line={"color": "#A83C3C", "width": 1, "dash": "dot"},
                           xref="x", yref=yref)
             fig.add_annotation(x=t_end, y=sl, text=f"SL {sl:.5f}",
                                xref="x", yref=yref, showarrow=False,
-                               font={"size": 9, "color": "#e53e3e"},
+                               font={"size": 9, "color": "#A83C3C"},
                                xanchor="right", yanchor="top")
         if tp:
             tp = float(tp)
             fig.add_shape(type="line", x0=t_start, x1=t_end, y0=tp, y1=tp,
-                          line={"color": "#38a169", "width": 1, "dash": "dot"},
+                          line={"color": "#357A52", "width": 1, "dash": "dot"},
                           xref="x", yref=yref)
             fig.add_annotation(x=t_end, y=tp, text=f"TP {tp:.5f}",
                                xref="x", yref=yref, showarrow=False,
-                               font={"size": 9, "color": "#38a169"},
+                               font={"size": 9, "color": "#357A52"},
                                xanchor="right", yanchor="bottom")
         # Triangle d'entrée sur le graphique
         if opened and opened >= t_start and entry:
@@ -1004,8 +1051,8 @@ def eurusd_chart(
         hovermode="x unified",
     )
     fig.update_xaxes(showgrid=False)
-    fig.update_yaxes(gridcolor="#edf2f7", row=1, col=1, tickformat=".5f")
-    fig.update_yaxes(gridcolor="#edf2f7", row=2, col=1, range=[0, 100])
+    fig.update_yaxes(gridcolor="#ECEAE4", row=1, col=1, tickformat=".5f")
+    fig.update_yaxes(gridcolor="#ECEAE4", row=2, col=1, range=[0, 100])
     return fig
 
 
@@ -1020,9 +1067,9 @@ def rsi_gauge(rsi_val: float) -> go.Figure:
             "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": C_MUTED},
             "bar": {"color": color, "thickness": 0.25},
             "steps": [
-                {"range": [0, 30], "color": "#f0fff4"},
-                {"range": [30, 70], "color": "#ebf8ff"},
-                {"range": [70, 100], "color": "#fff5f5"},
+                {"range": [0, 30], "color": "#EEF5EE"},
+                {"range": [30, 70], "color": "#EDF2F6"},
+                {"range": [70, 100], "color": "#F5EEEE"},
             ],
         },
     ))
@@ -1068,7 +1115,7 @@ def asset_sparkline(asset_id: str, data: dict) -> go.Figure:
         ))
     fig.update_layout(
         height=90, margin={"l": 6, "r": 6, "t": 6, "b": 6},
-        paper_bgcolor="#f8fafc", plot_bgcolor="#f8fafc",
+        paper_bgcolor=C_BG, plot_bgcolor=C_BG,
         showlegend=False,
         xaxis={"visible": False},
         yaxis={"visible": False},
@@ -1210,9 +1257,9 @@ def page_overview(state: dict, alpaca: dict) -> html.Div:
 
     # Status banner
     status_info = {
-        "live":    ("Bot Paper Trading actif — données en temps réel", C_GREEN, "#f0fff4"),
-        "delayed": ("Données récentes (< 1h)", C_YELLOW, "#fffff0"),
-        "offline": ("Bot hors ligne — lancez src/main.py", C_RED, "#fff5f5"),
+        "live":    ("Bot Paper Trading actif — données en temps réel", C_GREEN, "#EEF5EE"),
+        "delayed": ("Données récentes (< 1h)", C_YELLOW, "#F5F2E7"),
+        "offline": ("Bot hors ligne — lancez src/main.py", C_RED, "#F5EEEE"),
     }
     st_text, st_col, st_bg = status_info[fresh]
     banner = html.Div(st_text, style={
@@ -1222,12 +1269,12 @@ def page_overview(state: dict, alpaca: dict) -> html.Div:
     })
 
     # KPIs EUR/USD bot
-    initial = port.get("initial_capital", 10_000)
-    equity  = port.get("total_equity", initial)
-    pnl     = port.get("total_pnl", 0)
-    ret     = port.get("return_pct", 0)
-    eur_price = eur.get("price", 0)
-    eur_chg   = eur.get("change_pct", 0)
+    initial   = _pv(port.get("initial_capital"), 10_000)
+    equity    = _pv(port.get("total_equity"),    initial)
+    pnl       = _pv(port.get("total_pnl"),       0.0)
+    ret       = _pv(port.get("return_pct"),      0.0)
+    eur_price = _pv(eur.get("price"),            0.0)
+    eur_chg   = _pv(eur.get("change_pct"),       0.0)
     regime    = mkt.get("regime", "unknown")
     reg_fr    = mkt.get("regime_fr", "Inconnu")
     reg_col   = REGIME_COLOR.get(regime, C_MUTED)
@@ -1253,14 +1300,14 @@ def page_overview(state: dict, alpaca: dict) -> html.Div:
                      color=C_GREEN if eur_chg >= 0 else C_RED,
                      tooltip="Cours actuel EUR/USD 5min"),
             kpi_card(f"{reg_icon} Regime", reg_fr,
-                     subtitle=f"Confiance {mkt.get('confidence', 0)*100:.0f}%",
+                     subtitle=f"Confiance {_pv(mkt.get('confidence'), 0)*100:.0f}%",
                      color=reg_col,
                      tooltip="Regime de marché détecté"),
             kpi_card("Niveau de risque", mkt.get("risk_fr", "—"),
                      color=RISK_COLOR.get(mkt.get("risk_level", ""), C_MUTED),
                      tooltip="Niveau de risque calculé par le gestionnaire de risque"),
-            kpi_card("Positions", str(port.get("num_positions", 0)),
-                     subtitle=f"Exposition {port.get('exposure_pct', 0)*100:.1f}%",
+            kpi_card("Positions", str(port.get("num_positions", 0) or 0),
+                     subtitle=f"Exposition {_pv(port.get('exposure_pct'), 0)*100:.1f}%",
                      tooltip="Trades EUR/USD actuellement ouverts"),
         ], style={
             "display": "grid",
@@ -1472,15 +1519,15 @@ def page_eurusd(state: dict) -> html.Div:
     now_utc   = datetime.now(timezone.utc)
     total_min = now_utc.hour * 60 + now_utc.minute
     sessions  = [
-        ("Asie/Tokyo",  0,         3*60,     "#805ad5"),   # 00:00-03:00 UTC
-        ("Londres",     7*60,      9*60+30,  "#38a169"),   # 07:00-09:30 UTC
-        ("New York",    13*60+30,  16*60,    "#3182ce"),   # 13:30-16:00 UTC
+        ("Asie/Tokyo",  0,         3*60,     "#5E5496"),   # 00:00-03:00 UTC
+        ("Londres",     7*60,      9*60+30,  "#357A52"),   # 07:00-09:30 UTC
+        ("New York",    13*60+30,  16*60,    "#375F7A"),   # 13:30-16:00 UTC
     ]
     sess_items = []
     for name, start, end, col in sessions:
         active = start <= total_min < end
         sess_items.append(html.Div([
-            html.Div("●", style={"color": col if active else "#cbd5e0", "fontSize": "20px"}),
+            html.Div("●", style={"color": col if active else "#C6C4BC", "fontSize": "20px"}),
             html.Div(name, style={"fontWeight": "700", "fontSize": "13px",
                                    "color": C_TEXT if active else C_MUTED}),
             html.Div("ACTIVE" if active else "fermée",
@@ -1552,11 +1599,11 @@ def page_eurusd(state: dict) -> html.Div:
                 html.Div(f"({upnl_pct:+.2%})", style={"fontSize": "11px", "color": pnl_col}),
             ], style={"marginBottom": "6px"}),
             html.Div([
-                html.Span("SL ", style={"fontSize": "10px", "color": "#e53e3e", "fontWeight": "700"}),
+                html.Span("SL ", style={"fontSize": "10px", "color": "#A83C3C", "fontWeight": "700"}),
                 html.Span(f"{float(sl):.5f}" if sl else "—", style={"fontSize": "11px"}),
             ], style={"marginBottom": "2px"}),
             html.Div([
-                html.Span("TP ", style={"fontSize": "10px", "color": "#38a169", "fontWeight": "700"}),
+                html.Span("TP ", style={"fontSize": "10px", "color": "#357A52", "fontWeight": "700"}),
                 html.Span(f"{float(tp):.5f}" if tp else "—", style={"fontSize": "11px"}),
             ], style={"marginBottom": "6px"}),
             html.Div(strat[:20], style={"fontSize": "10px", "color": C_MUTED, "fontStyle": "italic"}),
@@ -1739,7 +1786,7 @@ def page_strategies(state: dict) -> html.Div:
                     "fontSize": "12px", "color": C_ACCENT, "marginTop": "4px", "fontWeight": "700",
                 }) if conf > 0 else None,
             ], style={
-                "background": "#f7fafc", "borderRadius": "8px", "padding": "10px 12px",
+                "background": "#F4F3EF", "borderRadius": "8px", "padding": "10px 12px",
             }),
         ], style={
             "background": C_PANEL, "border": f"1px solid {C_BORDER}",
@@ -1804,34 +1851,34 @@ def _position_chart(df, entry_price: float, sl, tp, opened_at: str) -> "go.Figur
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=dates, y=df90["close"], name="Prix",
-        line={"color": "#3182ce", "width": 2},
+        line={"color": "#375F7A", "width": 2},
         hovertemplate="%{y:.2f}<extra></extra>",
     ))
     if "ema20" in df90.columns:
         fig.add_trace(go.Scatter(
             x=dates, y=df90["ema20"], name="EMA20",
-            line={"color": "#38a169", "width": 1.5, "dash": "dot"},
+            line={"color": "#357A52", "width": 1.5, "dash": "dot"},
             hovertemplate="%{y:.2f}<extra>EMA20</extra>",
         ))
     if "ema50" in df90.columns:
         fig.add_trace(go.Scatter(
             x=dates, y=df90["ema50"], name="EMA50",
-            line={"color": "#dd6b20", "width": 1.5, "dash": "dot"},
+            line={"color": "#A8712A", "width": 1.5, "dash": "dot"},
             hovertemplate="%{y:.2f}<extra>EMA50</extra>",
         ))
 
     # Horizontal levels
-    fig.add_hline(y=entry_price, line_dash="dash", line_color="#3182ce", line_width=1.5,
+    fig.add_hline(y=entry_price, line_dash="dash", line_color="#375F7A", line_width=1.5,
                   annotation_text=f"Entree ${entry_price:.2f}",
-                  annotation_font={"size": 10, "color": "#3182ce"})
+                  annotation_font={"size": 10, "color": "#375F7A"})
     if sl:
-        fig.add_hline(y=float(sl), line_dash="dash", line_color="#e53e3e", line_width=1.2,
+        fig.add_hline(y=float(sl), line_dash="dash", line_color="#A83C3C", line_width=1.2,
                       annotation_text=f"Stop ${float(sl):.2f}",
-                      annotation_font={"size": 10, "color": "#e53e3e"})
+                      annotation_font={"size": 10, "color": "#A83C3C"})
     if tp:
-        fig.add_hline(y=float(tp), line_dash="dash", line_color="#38a169", line_width=1.2,
+        fig.add_hline(y=float(tp), line_dash="dash", line_color="#357A52", line_width=1.2,
                       annotation_text=f"Objectif ${float(tp):.2f}",
-                      annotation_font={"size": 10, "color": "#38a169"})
+                      annotation_font={"size": 10, "color": "#357A52"})
 
     # Vertical line at entry date
     if opened_at and len(opened_at) >= 10:
@@ -1840,18 +1887,18 @@ def _position_chart(df, entry_price: float, sl, tp, opened_at: str) -> "go.Figur
             entry_date = pd.Timestamp(opened_at[:10])
             if entry_date >= dates[0]:
                 fig.add_vline(x=entry_date, line_dash="dash",
-                              line_color="#7c3aed", line_width=1.5, opacity=0.7,
-                              annotation_text="Achat", annotation_font={"size": 10, "color": "#7c3aed"})
+                              line_color="#5E5496", line_width=1.5, opacity=0.7,
+                              annotation_text="Achat", annotation_font={"size": 10, "color": "#5E5496"})
         except Exception:
             pass
 
     fig.update_layout(
         height=260, margin={"l": 30, "r": 10, "t": 10, "b": 30},
-        paper_bgcolor="white", plot_bgcolor="#f7fafc",
+        paper_bgcolor=C_PANEL, plot_bgcolor=C_BG,
         showlegend=True,
         legend={"orientation": "h", "y": -0.18, "x": 0, "font": {"size": 11}},
-        xaxis={"gridcolor": "#e2e8f0", "showgrid": True},
-        yaxis={"gridcolor": "#e2e8f0", "showgrid": True},
+        xaxis={"gridcolor": "#E8E6E1", "showgrid": True},
+        yaxis={"gridcolor": "#E8E6E1", "showgrid": True},
         hovermode="x unified",
     )
     return fig
@@ -1929,12 +1976,12 @@ def page_positions(state: dict) -> html.Div:
     chart_data = _fetch_position_charts(tickers)
 
     # KPI bar
-    total_unreal = sum(float(p.get("unrealized_pnl", 0)) for p in pos_list)
-    total_val    = sum(float(p.get("market_value",   0)) for p in pos_list)
-    total_real   = sum(float(t.get("pnl", 0)) for t in trades)
-    exposure     = float(port.get("total_exposure", 0) or 0)
+    total_unreal = sum(_pv(p.get("unrealized_pnl")) for p in pos_list)
+    total_val    = sum(_pv(p.get("market_value"))   for p in pos_list)
+    total_real   = sum(_pv(t.get("pnl"))            for t in trades)
+    exposure     = _pv(port.get("total_exposure"))
     total_val    = exposure or total_val
-    cash         = float(port.get("available_cash", port.get("cash", 0)) or 0)
+    cash         = _pv(port.get("available_cash") or port.get("cash"))
 
     kpis = html.Div([
         kpi_card("Positions ouvertes", str(len(pos_list)),
@@ -1974,11 +2021,11 @@ def page_positions(state: dict) -> html.Div:
     # ── Equity position cards ─────────────────────────────────────────────────
     for p in equity_pos:
         asset   = p["asset"]
-        entry   = float(p.get("avg_entry",       0))
-        current = float(p.get("current_price",   0))
-        qty     = float(p.get("quantity",         0))
-        pnl     = float(p.get("unrealized_pnl",  0))
-        pnl_pct = float(p.get("unrealized_pnl_pct", 0)) * 100
+        entry   = _pv(p.get("avg_entry"),           0.0)
+        current = _pv(p.get("current_price"),        entry)
+        qty     = _pv(p.get("quantity"),             0.0)
+        pnl     = _pv(p.get("unrealized_pnl"),      0.0)
+        pnl_pct = _pv(p.get("unrealized_pnl_pct"),  0.0) * 100
         sl      = p.get("stop_loss")
         tp      = p.get("take_profit")
         strat   = p.get("strategy",  "—")
@@ -2070,7 +2117,7 @@ def page_positions(state: dict) -> html.Div:
             ], style={
                 "display": "flex", "gap": "18px", "flexWrap": "wrap",
                 "padding": "8px 16px", "borderBottom": f"1px solid {C_BORDER}",
-                "background": "#fafbfc",
+                "background": "#F4F3EF",
             }),
 
             # ── Chart ─────────────────────────────────────────────────────────
@@ -2122,7 +2169,7 @@ def page_positions(state: dict) -> html.Div:
             ], style={
                 "padding": "10px 16px",
                 "borderTop": f"1px solid {C_BORDER}",
-                "background": "#f8fafc",
+                "background": "#F4F3EF",
             }),
         ], style={
             "background": C_PANEL,
@@ -2141,13 +2188,13 @@ def page_positions(state: dict) -> html.Div:
             "asset": ASSET_DISPLAY_NAME.get(p["asset"], p["asset"]),
             "ticker": p["asset"],
             "type": str(managed_cfg.get(p["asset"], {}).get("type", "intraday")),
-            "levier": f"x{float(p.get('leverage', managed_cfg.get(p['asset'], {}).get('leverage', 1)) or 1):g}",
+            "levier": f"x{_pv(p.get('leverage', managed_cfg.get(p['asset'], {}).get('leverage', 1)), 1):g}",
             "qty": str(p.get("quantity", "—")),
-            "entree": f"${float(p.get('avg_entry', 0)):,.4f}",
-            "actuel": f"${float(p.get('current_price', 0)):,.4f}",
-            "marge": f"${float(p.get('margin', p.get('market_value', 0))):,.2f}",
-            "notional": f"${float(p.get('notional', p.get('market_value', 0))):,.2f}",
-            "pnl": f"${float(p.get('unrealized_pnl', 0)):+,.4f}",
+            "entree": f"${_pv(p.get('avg_entry')):,.4f}",
+            "actuel": f"${_pv(p.get('current_price'), _pv(p.get('avg_entry'))):,.4f}",
+            "marge": f"${_pv(p.get('margin') or p.get('market_value')):,.2f}",
+            "notional": f"${_pv(p.get('notional') or p.get('market_value')):,.2f}",
+            "pnl": f"${_pv(p.get('unrealized_pnl')):+,.4f}",
             "strat": p.get("strategy", "—"),
         } for p in managed_pos]
 
@@ -2172,7 +2219,7 @@ def page_positions(state: dict) -> html.Div:
                 ],
                 data=fx_rows, page_size=10,
                 style_table={"overflowX": "auto"},
-                style_header={"backgroundColor": "#ebf8ff", "fontWeight": "700", "fontSize": "11px"},
+                style_header={"backgroundColor": "#EDF2F6", "fontWeight": "700", "fontSize": "11px"},
                 style_cell={"fontSize": "12px", "padding": "6px 10px"},
             ),
         ], style={"background": C_PANEL, "border": f"1px solid {C_BORDER}",
@@ -2202,8 +2249,8 @@ def _closed_trades_panel(trades: list) -> html.Div:
         rows.append({
             "asset":  t.get("asset", "—"),
             "side":   t.get("side", "—"),
-            "entree": f"${float(t.get('entry_price', 0)):,.4f}",
-            "sortie": f"${float(t.get('exit_price', 0)):,.4f}",
+            "entree": f"${_pv(t.get('entry_price')):,.4f}",
+            "sortie": f"${_pv(t.get('exit_price')):,.4f}",
             "pnl":    f"${pnl:+,.4f}",
             "pct":    _safe_pct(pnl, ep * qty) if ep * qty else "—",
             "raison": t.get("exit_reason", "—"),
@@ -2229,7 +2276,7 @@ def _closed_trades_panel(trades: list) -> html.Div:
             ],
             data=rows, page_size=15,
             style_table={"overflowX": "auto"},
-            style_header={"backgroundColor": "#ebf8ff", "fontWeight": "700",
+            style_header={"backgroundColor": "#EDF2F6", "fontWeight": "700",
                           "fontSize": "11px", "border": f"1px solid {C_ACCENT}20"},
             style_cell={"fontSize": "12px", "padding": "7px 10px"},
             style_data_conditional=[
@@ -2237,7 +2284,7 @@ def _closed_trades_panel(trades: list) -> html.Div:
                  "color": C_GREEN, "fontWeight": "700"},
                 {"if": {"filter_query": '{pnl} contains "-"', "column_id": "pnl"},
                  "color": C_RED, "fontWeight": "700"},
-                {"if": {"row_index": "odd"}, "backgroundColor": "#f7fbff"},
+                {"if": {"row_index": "odd"}, "backgroundColor": "#EFF4F8"},
             ],
         ),
     ], style={"background": C_PANEL, "border": f"1px solid {C_ACCENT}30",
@@ -2330,11 +2377,11 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
                 data=alp_pos_rows,
                 page_size=20,
                 style_table={"overflowX": "auto"},
-                style_header={"backgroundColor": "#f3f0ff", "fontWeight": "700",
+                style_header={"backgroundColor": "#EDEAF6", "fontWeight": "700",
                                "fontSize": "11px", "border": f"1px solid {C_ALPACA}20"},
                 style_cell={"fontSize": "12px", "padding": "7px 10px",
                              "fontFamily": "Inter, sans-serif"},
-                style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#faf5ff"}],
+                style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#F0EBF8"}],
             ),
         ], style={"background": C_PANEL, "border": f"1px solid {C_ALPACA}30",
                   "borderRadius": "10px", "overflow": "hidden", "marginBottom": "14px"})
@@ -2348,8 +2395,8 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
             alp_trade_rows.append({
                 "ticker":    t.get("ticker", "—"),
                 "strategie": t.get("strategy", "—"),
-                "entree":    f"${float(t.get('entry_price', 0)):.2f}",
-                "sortie":    f"${float(t.get('exit_price', 0)):.2f}",
+                "entree":    f"${_pv(t.get('entry_price')):.2f}",
+                "sortie":    f"${_pv(t.get('exit_price')):.2f}",
                 "raison":    t.get("exit_reason", "—"),
                 "pnl":       f"${pnl_v:+,.2f}",
                 "pct":       _safe_pct(pnl_v, ep * qty),
@@ -2375,11 +2422,11 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
                 data=alp_trade_rows,
                 page_size=15,
                 style_table={"overflowX": "auto"},
-                style_header={"backgroundColor": "#f3f0ff", "fontWeight": "700",
+                style_header={"backgroundColor": "#EDEAF6", "fontWeight": "700",
                                "fontSize": "11px", "border": f"1px solid {C_ALPACA}20"},
                 style_cell={"fontSize": "12px", "padding": "7px 10px",
                              "fontFamily": "Inter, sans-serif"},
-                style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#faf5ff"}],
+                style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#F0EBF8"}],
             ),
         ], style={"background": C_PANEL, "border": f"1px solid {C_ALPACA}30",
                   "borderRadius": "10px", "overflow": "hidden", "marginBottom": "14px"})
@@ -2389,23 +2436,30 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
     # ─── SECTION BOT PAPER TRADING ────────────────────────────────────────
     sections.append(section_header("Bot Paper Trading (Actions & Forex)", C_ACCENT))
 
-    initial = float(port.get("initial_capital", 10_000))
-    equity  = float(port.get("total_equity", initial))
-    pnl_col = C_GREEN if port.get("total_pnl", 0) >= 0 else C_RED
+    initial = _pv(port.get("initial_capital"), 10_000)
+    equity  = _pv(port.get("total_equity"),    initial)
+    _pnl    = _pv(port.get("total_pnl"))
+    pnl_col = C_GREEN if _pnl >= 0 else C_RED
+
+    _cash   = _pv(port.get("available_cash") or port.get("cash"))
+    _opnl   = _pv(port.get("open_pnl"))
+    _rpnl   = _pv(port.get("realized_pnl"))
+    _ret    = _pv(port.get("return_pct"))
+    _dd     = _pv(port.get("drawdown_pct"))
 
     eur_kpis = html.Div([
         kpi_card("Capital total", f"${equity:,.2f}",
                  color=C_GREEN if equity >= initial else C_RED,
                  tooltip="Cash + toutes positions ouvertes"),
-        kpi_card("Cash dispo", f"${float(port.get('available_cash', port.get('cash', 0))):,.2f}"),
-        kpi_card("P&L non realise", f"${float(port.get('open_pnl', 0)):+,.2f}",
-                 color=C_GREEN if float(port.get('open_pnl', 0)) >= 0 else C_RED),
-        kpi_card("P&L realise", f"${float(port.get('realized_pnl', 0)):+,.2f}",
-                 color=C_GREEN if float(port.get('realized_pnl', 0)) >= 0 else C_RED),
-        kpi_card("Return", f"{float(port.get('return_pct', 0)):+.2f}%",
+        kpi_card("Cash dispo", f"${_cash:,.2f}"),
+        kpi_card("P&L non realise", f"${_opnl:+,.2f}",
+                 color=C_GREEN if _opnl >= 0 else C_RED),
+        kpi_card("P&L realise", f"${_rpnl:+,.2f}",
+                 color=C_GREEN if _rpnl >= 0 else C_RED),
+        kpi_card("Return", f"{_ret:+.2f}%",
                  color=pnl_col),
-        kpi_card("Drawdown max", f"{float(port.get('drawdown_pct', 0))*100:.2f}%",
-                 color=C_RED if float(port.get('drawdown_pct', 0)) < -0.05 else C_MUTED,
+        kpi_card("Drawdown max", f"{_dd * 100:.2f}%",
+                 color=C_RED if _dd < -0.05 else C_MUTED,
                  tooltip="Perte maximale depuis le plus haut atteint"),
     ], style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)",
               "gap": "10px", "marginBottom": "14px"})
@@ -2456,10 +2510,10 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
             data=pos_data,
             page_size=20,
             style_table={"overflowX": "auto"},
-            style_header={"backgroundColor": "#ebf8ff", "fontWeight": "700",
+            style_header={"backgroundColor": "#EDF2F6", "fontWeight": "700",
                            "fontSize": "11px", "border": f"1px solid {C_ACCENT}20"},
             style_cell={"fontSize": "12px", "padding": "7px 10px", "fontFamily": "Inter, sans-serif"},
-            style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#f7fbff"}],
+            style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#EFF4F8"}],
         ),
     ], style={"background": C_PANEL, "border": f"1px solid {C_ACCENT}30",
               "borderRadius": "10px", "overflow": "hidden", "marginBottom": "14px"})
@@ -2504,10 +2558,10 @@ def page_portfolio(state: dict, alpaca: dict) -> html.Div:
             data=trade_data,
             page_size=15,
             style_table={"overflowX": "auto"},
-            style_header={"backgroundColor": "#ebf8ff", "fontWeight": "700",
+            style_header={"backgroundColor": "#EDF2F6", "fontWeight": "700",
                            "fontSize": "11px", "border": f"1px solid {C_ACCENT}20"},
             style_cell={"fontSize": "12px", "padding": "7px 10px", "fontFamily": "Inter, sans-serif"},
-            style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#f7fbff"}],
+            style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#EFF4F8"}],
         ),
     ], style={"background": C_PANEL, "border": f"1px solid {C_ACCENT}30",
               "borderRadius": "10px", "overflow": "hidden"})
@@ -2572,11 +2626,11 @@ def page_regime(state: dict) -> html.Div:
             html.Div([
                 html.Div("Ce que fait le bot", style={"fontWeight": "700", "fontSize": "12px", "color": C_MUTED}),
                 html.Div(action, style={"fontSize": "13px", "marginTop": "4px"}),
-            ], style={"background": "#f0fff4", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
+            ], style={"background": "#EEF5EE", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
             html.Div([
                 html.Div("Risques", style={"fontWeight": "700", "fontSize": "12px", "color": C_MUTED}),
                 html.Div(risk, style={"fontSize": "13px", "color": C_RED, "marginTop": "4px"}),
-            ], style={"background": "#fff5f5", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
+            ], style={"background": "#F5EEEE", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
         ], style={"display": "flex", "gap": "12px"}),
     ], border_color=reg_col)
 
@@ -2601,11 +2655,11 @@ def page_regime(state: dict) -> html.Div:
             html.Div([
                 html.Div("Risques identifiés", style={"fontWeight": "700", "color": C_MUTED, "fontSize": "12px"}),
                 html.Ul([html.Li(r, style={"fontSize": "13px", "marginTop": "3px"}) for r in (risks_list or ["—"])]),
-            ], style={"background": "#fff5f5", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
+            ], style={"background": "#F5EEEE", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
             html.Div([
                 html.Div("Opportunités", style={"fontWeight": "700", "color": C_MUTED, "fontSize": "12px"}),
                 html.Ul([html.Li(o, style={"fontSize": "13px", "marginTop": "3px"}) for o in (opps_list or ["—"])]),
-            ], style={"background": "#f0fff4", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
+            ], style={"background": "#EEF5EE", "borderRadius": "8px", "padding": "12px", "flex": "1"}),
         ], style={"display": "flex", "gap": "12px"}),
     ])
 
@@ -2628,9 +2682,9 @@ def page_regime(state: dict) -> html.Div:
                 html.Div(", ".join(topics[:3]) if topics else "—",
                          style={"fontSize": "12px"}),
             ], style={"flex": "1"}),
-            html.Span(f"risque {float(art.get('risk_score', 0)):.0%}",
+            html.Span(f"risque {_pv(art.get('risk_score')):.0%}",
                       style={"fontSize": "11px",
-                             "color": C_ORANGE if float(art.get("risk_score", 0) or 0) > 0.5 else C_MUTED}),
+                             "color": C_ORANGE if _pv(art.get("risk_score")) > 0.5 else C_MUTED}),
         ], style={"display": "flex", "alignItems": "center", "gap": "10px",
                   "padding": "6px 0", "borderBottom": f"1px solid {C_BORDER}"}))
 
@@ -2673,9 +2727,9 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
 
     # ── 1. Barre de statut bot ────────────────────────────────────────────
     status_colors = {
-        "live":    (C_GREEN, "#f0fff4", "Bot actif"),
-        "delayed": (C_YELLOW, "#fffff0", "Données récentes"),
-        "offline": (C_RED, "#fff5f5", "Bot hors ligne"),
+        "live":    (C_GREEN, "#EEF5EE", "Bot actif"),
+        "delayed": (C_YELLOW, "#F5F2E7", "Données récentes"),
+        "offline": (C_RED, "#F5EEEE", "Bot hors ligne"),
     }
     sc, sbg, stxt = status_colors[fresh]
     status_bar = html.Div([
@@ -2714,7 +2768,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
             html.Div([
                 html.Span(art["source"], style={
                     "fontSize": "10px", "fontWeight": "700", "color": C_ACCENT,
-                    "background": "#ebf8ff", "borderRadius": "4px",
+                    "background": "#EDF2F6", "borderRadius": "4px",
                     "padding": "2px 7px", "marginRight": "8px",
                 }),
                 html.Span(pub_short, style={"fontSize": "10px", "color": C_MUTED}),
@@ -2757,7 +2811,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
         html.Div(news_cards, style={"maxHeight": "340px", "overflowY": "auto"}),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
     })
 
     # ── 3. Analyse Groq interactive ───────────────────────────────────────
@@ -2776,9 +2830,11 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
                 n_clicks=0,
                 style={
                     "background": C_PURPLE, "color": "#fff", "border": "none",
-                    "borderRadius": "8px", "padding": "9px 20px",
-                    "fontWeight": "800", "fontSize": "13px", "cursor": "pointer",
-                    "boxShadow": "0 2px 8px rgba(128,90,213,0.25)",
+                    "borderRadius": "4px", "padding": "9px 20px",
+                    "fontWeight": "600", "fontSize": "12px", "cursor": "pointer",
+                    "letterSpacing": "0.04em",
+                    "boxShadow": "0 1px 4px rgba(94,84,150,0.2)",
+                    "transition": "opacity 0.18s ease",
                 }),
         ], style={
             "display": "flex", "justifyContent": "space-between", "alignItems": "center",
@@ -2789,7 +2845,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
             id="groq-live-display",
             style={
                 "fontSize": "15px", "lineHeight": "1.9", "color": C_TEXT if groq_display else C_MUTED,
-                "background": "#f9f9ff" if groq_display else "#fafafa",
+                "background": "#F3F1F9" if groq_display else "#F4F3EF",
                 "borderRadius": "10px", "padding": "18px 20px",
                 "borderLeft": f"4px solid {C_PURPLE}",
                 "fontStyle": "normal" if groq_display else "italic",
@@ -2798,8 +2854,8 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
         ),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "20px 22px", "marginBottom": "16px",
-        "boxShadow": "0 2px 8px rgba(128,90,213,0.08)",
+        "borderRadius": "8px", "padding": "20px 22px", "marginBottom": "16px",
+        "boxShadow": "0 1px 4px rgba(94,84,150,0.07)",
     })
 
     # ── 4. Analyse Groq quotidienne (du bot) ─────────────────────────────
@@ -2836,7 +2892,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
             analyst or "L'analyse Groq n'est pas encore disponible. Elle se déclenche automatiquement une fois par jour. Relancez le bot pour forcer un cycle.",
             style={
                 "fontSize": "15px", "lineHeight": "1.85", "color": C_TEXT,
-                "background": "#f9f9ff", "borderRadius": "10px",
+                "background": "#F3F1F9", "borderRadius": "10px",
                 "padding": "18px 20px", "marginBottom": "16px",
                 "borderLeft": f"4px solid {C_PURPLE}",
                 "fontStyle": "normal" if analyst else "italic",
@@ -2858,7 +2914,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
                     ], style={"marginBottom": "6px"}) for r in (risks_list or ["Aucun risque identifié"])],
                 ),
             ], style={
-                "background": "#fff5f5", "borderRadius": "10px", "padding": "16px",
+                "background": "#F5EEEE", "borderRadius": "10px", "padding": "16px",
                 "flex": "1", "border": f"1px solid {C_RED}20",
             }),
             html.Div([
@@ -2873,14 +2929,14 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
                     ], style={"marginBottom": "6px"}) for o in (opps_list or ["Aucune opportunité identifiée"])],
                 ),
             ], style={
-                "background": "#f0fff4", "borderRadius": "10px", "padding": "16px",
+                "background": "#EEF5EE", "borderRadius": "10px", "padding": "16px",
                 "flex": "1", "border": f"1px solid {C_GREEN}20",
             }),
         ], style={"display": "flex", "gap": "14px"}),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "20px 22px", "marginBottom": "16px",
-        "boxShadow": "0 2px 8px rgba(128,90,213,0.08)",
+        "borderRadius": "8px", "padding": "20px 22px", "marginBottom": "16px",
+        "boxShadow": "0 1px 4px rgba(94,84,150,0.07)",
     })
 
     # ── 5. Niveaux techniques EUR/USD ─────────────────────────────────────
@@ -2927,7 +2983,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
         level_row("Objectif (ATR×2.5)", f"{atr_v*2.5*10000:.1f} pips" if atr_v else "—", "Distance take-profit type intraday"),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
     })
 
     # ── 6. Journal des décisions du bot ──────────────────────────────────
@@ -2989,7 +3045,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
         html.Div(journal_rows),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
     })
 
     # ── 7. Prochaines fenêtres de trading ────────────────────────────────
@@ -3008,9 +3064,9 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
         return f"dans {hrs}h{mins:02d}" if hrs else f"dans {mins} min"
 
     windows = [
-        ("Londres",  7*60,      9*60+30,  "#38a169",
+        ("Londres",  7*60,      9*60+30,  "#357A52",
          "Première heure — volatilité élevée, cassures fréquentes"),
-        ("New York", 13*60+30,  16*60,    "#3182ce",
+        ("New York", 13*60+30,  16*60,    "#375F7A",
          "Ouverture US — chevauchement London+NY, meilleure liquidité"),
     ]
 
@@ -3032,7 +3088,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
                 html.Div(status, style={
                     "fontWeight": "900", "fontSize": "13px",
                     "color": col if is_active else C_TEXT,
-                    "background": f"{col}15" if is_active else "#f7fafc",
+                    "background": f"{col}15" if is_active else "#F4F3EF",
                     "borderRadius": "8px", "padding": "6px 14px",
                     "border": f"1px solid {col}30",
                 }),
@@ -3075,7 +3131,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
             ], style={"marginBottom": "6px"})
             for b in blockers
         ], style={
-            "background": "#f7fafc", "borderRadius": "8px",
+            "background": "#F4F3EF", "borderRadius": "8px",
             "padding": "14px 16px", "marginBottom": "14px",
         }),
         html.Div([
@@ -3087,7 +3143,7 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
         ]),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
     })
 
     # ── 8. Etat bot résumé (Alpaca) ───────────────────────────────────────
@@ -3103,11 +3159,11 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
         html.Div([
             html.Div([
                 html.Div("EUR/USD Bot (intraday)", style={"fontWeight": "700", "color": C_ACCENT, "marginBottom": "6px"}),
-                html.Div(f"Capital : ${float(port.get('total_equity', 10000)):,.2f}", style={"fontSize": "13px"}),
+                html.Div(f"Capital : ${_pv(port.get('total_equity'), 10000):,.2f}", style={"fontSize": "13px"}),
                 html.Div(f"Positions : {port.get('num_positions', 0)}", style={"fontSize": "13px"}),
-                html.Div(f"Cash : ${float(port.get('available_cash', port.get('cash', 0))):,.2f}", style={"fontSize": "13px"}),
+                html.Div(f"Cash : ${_pv(port.get('available_cash') or port.get('cash')):,.2f}", style={"fontSize": "13px"}),
             ], style={
-                "background": "#ebf8ff", "borderRadius": "10px",
+                "background": "#EDF2F6", "borderRadius": "10px",
                 "padding": "14px 16px", "flex": "1", "border": f"1px solid {C_ACCENT}20",
             }),
             html.Div([
@@ -3116,13 +3172,13 @@ def page_analyse(state: dict, alpaca: dict, groq_live: str | None = None) -> htm
                 html.Div(f"Positions : {len(alp_targets)} ({', '.join(alp_targets.keys()) if alp_targets else 'aucune'})", style={"fontSize": "13px"}),
                 html.Div(f"P&L réalisé : ${alp_pnl:+,.2f}", style={"fontSize": "13px", "color": C_GREEN if alp_pnl >= 0 else C_RED}),
             ], style={
-                "background": "#f3f0ff", "borderRadius": "10px",
+                "background": "#EDEAF6", "borderRadius": "10px",
                 "padding": "14px 16px", "flex": "1", "border": f"1px solid {C_ALPACA}20",
             }),
         ], style={"display": "flex", "gap": "14px"}),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px",
+        "borderRadius": "8px", "padding": "18px 20px",
     })
 
     return html.Div([
@@ -3167,7 +3223,7 @@ def page_themes(state: dict) -> html.Div:
         html.Div(ts_label, style={"fontSize": "11px", "color": C_MUTED, "marginTop": "8px"}),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
     })
 
     # ── Score bar chart ────────────────────────────────────────────────────
@@ -3187,7 +3243,7 @@ def page_themes(state: dict) -> html.Div:
         ))
         fig_bar.update_layout(
             margin=dict(l=10, r=60, t=20, b=20),
-            paper_bgcolor="white", plot_bgcolor="white",
+            paper_bgcolor=C_PANEL, plot_bgcolor=C_PANEL,
             height=280,
             xaxis=dict(range=[-1.1, 1.1], zeroline=True,
                        zerolinecolor=C_BORDER, tickfont=dict(size=11)),
@@ -3199,7 +3255,7 @@ def page_themes(state: dict) -> html.Div:
             dcc.Graph(figure=fig_bar, config={"displayModeBar": False}),
         ], style={
             "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-            "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+            "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
         })
     else:
         chart_section = html.Div(
@@ -3254,7 +3310,7 @@ def page_themes(state: dict) -> html.Div:
         }),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
     }) if sector_cards else html.Div()
 
     # ── Active universe ────────────────────────────────────────────────────
@@ -3271,7 +3327,7 @@ def page_themes(state: dict) -> html.Div:
         ),
     ], style={
         "background": C_PANEL, "border": f"1px solid {C_BORDER}",
-        "borderRadius": "12px", "padding": "18px 20px", "marginBottom": "16px",
+        "borderRadius": "8px", "padding": "18px 20px", "marginBottom": "16px",
     })
 
     return html.Div([
@@ -3283,6 +3339,370 @@ def page_themes(state: dict) -> html.Div:
 
 
 # ── Rendu d'un onglet ─────────────────────────────────────────────────────────
+
+def page_metrics(state: dict) -> html.Div:
+    """Page Metriques — graphiques simples et lisibles."""
+    import plotly.graph_objects as go
+
+    broker      = read_broker_state()
+    tracker     = read_perf_tracker()
+    trades      = broker.get("trade_history", [])
+    eq_hist     = state.get("equity_history", [])
+    initial_cap = broker.get("initial_capital", 2000.0)
+
+    # ── Calculs de base ──────────────────────────────────────────────────
+    total_pnl = sum(t.get("pnl", 0) for t in trades)
+    wins      = [t for t in trades if t.get("pnl", 0) > 0]
+    losses    = [t for t in trades if t.get("pnl", 0) < 0]
+    n_trades  = len(trades)
+    win_rate  = len(wins) / max(n_trades, 1) * 100
+    avg_win   = sum(t["pnl"] for t in wins)  / max(len(wins), 1)
+    avg_loss  = sum(abs(t["pnl"]) for t in losses) / max(len(losses), 1)
+    rr        = avg_win / max(avg_loss, 0.01)
+
+    current_cap = broker.get("cash", initial_cap)
+    for p in broker.get("positions", []):
+        current_cap += p.get("current_price", p.get("avg_entry", 0)) * p.get("quantity", 0)
+
+    by_asset: dict[str, dict] = {}
+    for t in trades:
+        a = t.get("asset", "?")
+        if a not in by_asset:
+            by_asset[a] = {"pnl": 0.0, "wins": 0, "total": 0}
+        by_asset[a]["pnl"]   += t.get("pnl", 0)
+        by_asset[a]["total"] += 1
+        if t.get("pnl", 0) > 0:
+            by_asset[a]["wins"] += 1
+
+    close_reasons: dict[str, int] = {}
+    for t in trades:
+        r = t.get("close_reason", "signal") or "signal"
+        close_reasons[r] = close_reasons.get(r, 0) + 1
+
+    # ── KPI row ──────────────────────────────────────────────────────────
+    pnl_color = C_GREEN if total_pnl >= 0 else C_RED
+    wr_color  = C_GREEN if win_rate >= 45 else (C_ORANGE if win_rate >= 30 else C_RED)
+    rr_color  = C_GREEN if rr >= 2.0 else (C_ORANGE if rr >= 1.0 else C_RED)
+
+    kpi_row = html.Div(style={
+        "display": "grid", "gridTemplateColumns": "repeat(5, 1fr)",
+        "gap": "12px", "marginBottom": "24px",
+    }, children=[
+        kpi_card("P&L Total",        f"${total_pnl:+.2f}",    color=pnl_color,
+                 subtitle="gains/pertes depuis le debut"),
+        kpi_card("Taux de reussite", f"{win_rate:.0f}%",       color=wr_color,
+                 subtitle=f"{len(wins)} gagnants / {len(losses)} perdants"),
+        kpi_card("R:R reel",         f"{rr:.2f}x",             color=rr_color,
+                 subtitle=f"gain moy ${avg_win:.2f}  perte moy ${avg_loss:.2f}"),
+        kpi_card("Capital actuel",   f"${current_cap:.0f}",    color=C_ACCENT,
+                 subtitle=f"depart : ${initial_cap:.0f}"),
+        kpi_card("Trades fermes",    str(n_trades),            color=C_TEXT,
+                 subtitle="positions cloturees"),
+    ])
+
+    # ── Helpers graphiques ───────────────────────────────────────────────
+    def _layout(height=280, pie=False) -> dict:
+        base = dict(
+            paper_bgcolor=C_PANEL, plot_bgcolor=C_PANEL,
+            font=dict(family="Inter, system-ui", size=11, color=C_TEXT),
+            margin=dict(l=55, r=20, t=60, b=40),
+            height=height, showlegend=False,
+        )
+        if not pie:
+            base["xaxis"] = dict(showgrid=False, zeroline=False,
+                                 tickfont=dict(size=10, color=C_MUTED), linecolor=C_BORDER)
+            base["yaxis"] = dict(gridcolor="#ECEAE4", zeroline=False,
+                                 tickfont=dict(size=10, color=C_MUTED), linecolor=C_BORDER)
+        return base
+
+    def _title(main: str, sub: str = "") -> dict:
+        text = f"<b>{main}</b>"
+        if sub:
+            text += f"<br><span style='font-size:10px;color:{C_MUTED}'>{sub}</span>"
+        return dict(text=text, x=0.01, xanchor="left", yanchor="top",
+                    font=dict(size=13, color=C_TEXT))
+
+    def _empty(msg="Pas encore de donnees") -> html.Div:
+        return html.Div(msg, style={
+            "color": C_MUTED, "fontSize": "13px", "textAlign": "center",
+            "padding": "40px 0",
+        })
+
+    def _panel(content) -> html.Div:
+        return html.Div(content, style={
+            "background": C_PANEL, "border": f"1px solid {C_BORDER}",
+            "borderRadius": "8px", "padding": "4px 8px",
+        })
+
+    def _graph(fig) -> html.Div:
+        return _panel(dcc.Graph(figure=fig, config={"displayModeBar": False}))
+
+    # ── GRAPHIQUE 1 : Courbe du capital ───────────────────────────────────
+    # Question : "Est-ce que le bot gagne de l'argent ?"
+    def _chart_capital() -> go.Figure:
+        fig = go.Figure()
+        xs: list = []
+        ys: list = []
+
+        if len(eq_hist) >= 2:
+            xs = [e.get("time", "") for e in eq_hist]
+            ys = [float(e.get("equity", initial_cap)) for e in eq_hist]
+        elif trades:
+            running = initial_cap
+            for t in sorted(trades, key=lambda x: x.get("closed_at", "")):
+                running += t.get("pnl", 0)
+                xs.append(t.get("closed_at", "")[:16])
+                ys.append(running)
+
+        if ys:
+            color = C_GREEN if ys[-1] >= initial_cap else C_RED
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+            fig.add_trace(go.Scatter(
+                x=xs, y=ys, mode="lines",
+                line=dict(color=color, width=2.5),
+                fill="tozeroy", fillcolor=f"rgba({r},{g},{b},0.10)",
+            ))
+            fig.add_hline(y=initial_cap,
+                          line_dash="dash", line_color=C_MUTED, line_width=1.5,
+                          annotation_text=f"Depart ${initial_cap:.0f}",
+                          annotation_font_size=10, annotation_font_color=C_MUTED,
+                          annotation_position="bottom right")
+        else:
+            fig.add_annotation(text="Aucun trade ferme", x=0.5, y=0.5,
+                               xref="paper", yref="paper", showarrow=False,
+                               font=dict(size=13, color=C_MUTED))
+
+        lo = _layout(300)
+        lo["yaxis"]["title"] = "Capital ($)"
+        fig.update_layout(**lo, title=_title(
+            "Capital de la plateforme",
+            "La courbe monte = le bot gagne. La ligne en pointilles = capital de depart."
+        ))
+        return fig
+
+    # ── GRAPHIQUE 2 : Victoires vs Defaites ──────────────────────────────
+    # Question : "Combien de trades sur deux sont gagnants ?"
+    def _chart_wins() -> go.Figure:
+        fig = go.Figure()
+        if n_trades == 0:
+            fig.add_annotation(text="Aucun trade", x=0.5, y=0.5,
+                               xref="paper", yref="paper", showarrow=False,
+                               font=dict(size=13, color=C_MUTED))
+        else:
+            n_neutral = n_trades - len(wins) - len(losses)
+            labels = ["Gagnants", "Perdants"]
+            values = [len(wins), len(losses)]
+            colors = [C_GREEN, C_RED]
+            if n_neutral > 0:
+                labels.append("Nul")
+                values.append(n_neutral)
+                colors.append(C_MUTED)
+            fig.add_trace(go.Pie(
+                labels=labels, values=values,
+                marker_colors=colors, hole=0.58,
+                textinfo="label+percent+value",
+                textfont_size=12, textposition="outside",
+                insidetextorientation="auto",
+            ))
+        fig.update_layout(
+            paper_bgcolor=C_PANEL, plot_bgcolor=C_PANEL,
+            font=dict(family="Inter, system-ui", size=11, color=C_TEXT),
+            margin=dict(l=30, r=30, t=65, b=30),
+            height=280, showlegend=False,
+            title=_title("Victoires vs Defaites",
+                         f"Sur {n_trades} trades fermes au total"),
+        )
+        return fig
+
+    # ── GRAPHIQUE 3 : SL vs TP ────────────────────────────────────────────
+    # Question : "Le bot atteint-il ses objectifs ou est-il souvent stoppe ?"
+    def _chart_close_reasons() -> go.Figure:
+        fig = go.Figure()
+        label_map = {
+            "stop_loss":   "Stop Loss\n(perte stoppee)",
+            "take_profit": "Take Profit\n(objectif atteint)",
+            "signal":      "Signal\n(fermeture manuelle)",
+        }
+        if not close_reasons:
+            fig.add_annotation(text="Aucun trade", x=0.5, y=0.5,
+                               xref="paper", yref="paper", showarrow=False,
+                               font=dict(size=13, color=C_MUTED))
+        else:
+            labels, values, colors = [], [], []
+            for k, v in sorted(close_reasons.items(), key=lambda x: -x[1]):
+                labels.append(label_map.get(k, k))
+                values.append(v)
+                if "stop" in k or k.lower() == "sl":
+                    colors.append(C_RED)
+                elif "take" in k or k.lower() == "tp":
+                    colors.append(C_GREEN)
+                else:
+                    colors.append(C_ACCENT)
+            fig.add_trace(go.Bar(
+                x=labels, y=values, marker_color=colors,
+                text=values, textposition="outside",
+                textfont=dict(size=14, color=C_TEXT),
+                width=0.5,
+            ))
+        lo = _layout(280)
+        lo["yaxis"]["title"] = "Nombre de trades"
+        fig.update_layout(**lo, title=_title(
+            "Comment les trades se ferment",
+            "Vert = TP atteint (bon). Rouge = SL touche (perte limitee)."
+        ))
+        return fig
+
+    # ── GRAPHIQUE 4 : P&L par actif ───────────────────────────────────────
+    # Question : "Quel marche rapporte le plus (ou perd le plus) ?"
+    def _chart_asset_pnl() -> go.Figure:
+        fig = go.Figure()
+        if not by_asset:
+            fig.add_annotation(text="Aucun trade", x=0.5, y=0.5,
+                               xref="paper", yref="paper", showarrow=False,
+                               font=dict(size=13, color=C_MUTED))
+        else:
+            items = sorted(by_asset.items(), key=lambda x: x[1]["pnl"])
+            names  = [a for a, _ in items]
+            pnls   = [d["pnl"] for _, d in items]
+            labels = [
+                f"${p:+.2f}  ({d['wins']}/{d['total']} gagnants)"
+                for (_, d), p in zip(items, pnls)
+            ]
+            colors = [C_GREEN if p >= 0 else C_RED for p in pnls]
+            fig.add_trace(go.Bar(
+                y=names, x=pnls, orientation="h",
+                marker_color=colors,
+                text=labels, textposition="outside",
+                textfont=dict(size=11, color=C_TEXT),
+            ))
+            fig.add_vline(x=0, line_color=C_BORDER, line_width=1.5)
+
+        h = max(240, len(by_asset) * 52 + 90) if by_asset else 240
+        lo = _layout(h)
+        lo["xaxis"]["title"] = "P&L ($)"
+        fig.update_layout(**lo, title=_title(
+            "Quel marche rapporte le plus ?",
+            "Vert = rentable. Rouge = perd de l'argent. Format : gain ($) et taux de reussite."
+        ))
+        return fig
+
+    # ── GRAPHIQUE 5 : Le bot apprend-il ? ────────────────────────────────
+    # Question : "Le taux de reussite augmente-t-il avec le temps ?"
+    def _chart_learning() -> go.Figure:
+        fig = go.Figure()
+        source = sorted(
+            [t for t in (tracker or trades) if t.get("pnl") is not None],
+            key=lambda x: x.get("closed_at", ""),
+        )
+        n = len(source)
+        if n < 5:
+            fig.add_annotation(
+                text=f"Il faut au moins 5 trades pour afficher cette courbe ({n} actuellement).",
+                x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False,
+                font=dict(size=12, color=C_MUTED),
+            )
+        else:
+            window = min(10, max(3, n // 4))
+            labels, roll_wr = [], []
+            for i in range(n):
+                w_trades = source[max(0, i - window + 1): i + 1]
+                w = sum(1 for t in w_trades if t.get("pnl", 0) > 0)
+                roll_wr.append(w / len(w_trades) * 100)
+                labels.append(f"#{i+1}")
+
+            point_colors = [C_GREEN if v >= 40 else (C_ORANGE if v >= 25 else C_RED)
+                            for v in roll_wr]
+            fig.add_trace(go.Scatter(
+                x=labels, y=roll_wr, mode="lines+markers",
+                line=dict(color=C_ACCENT, width=2),
+                marker=dict(size=6, color=point_colors,
+                            line=dict(color=C_PANEL, width=1)),
+            ))
+            fig.add_hrect(y0=40, y1=100, fillcolor=C_GREEN, opacity=0.05, line_width=0)
+            fig.add_hline(y=33, line_dash="dot", line_color=C_RED, line_width=1.5,
+                          annotation_text="Minimum viable (33%)",
+                          annotation_font_size=9, annotation_font_color=C_RED,
+                          annotation_position="bottom right")
+            fig.add_hline(y=50, line_dash="dot", line_color=C_GREEN, line_width=1,
+                          annotation_text="50%",
+                          annotation_font_size=9, annotation_font_color=C_GREEN,
+                          annotation_position="top right")
+
+        lo = _layout(280)
+        lo["yaxis"]["title"] = "% de trades gagnants"
+        lo["yaxis"]["range"] = [0, 100]
+        fig.update_layout(**lo, title=_title(
+            "Le bot s'ameliore-t-il ?",
+            f"Win rate glissant sur les {min(10, max(3, n//4) if n >= 5 else 0)} derniers trades. Zone verte = objectif."
+        ))
+        return fig
+
+    # ── GRAPHIQUE 6 : Gain moyen vs Perte moyenne ─────────────────────────
+    # Question : "Quand le bot gagne, gagne-t-il plus qu'il ne perd ?"
+    def _chart_rr() -> go.Figure:
+        fig = go.Figure()
+        if not wins and not losses:
+            fig.add_annotation(text="Aucun trade", x=0.5, y=0.5,
+                               xref="paper", yref="paper", showarrow=False,
+                               font=dict(size=13, color=C_MUTED))
+        else:
+            fig.add_trace(go.Bar(
+                x=["Gain moyen quand on gagne", "Perte moyenne quand on perd"],
+                y=[avg_win, avg_loss],
+                marker_color=[C_GREEN, C_RED],
+                text=[f"${avg_win:.2f}", f"${avg_loss:.2f}"],
+                textposition="outside",
+                textfont=dict(size=16, color=C_TEXT),
+                width=0.45,
+            ))
+            rr_label = f"Ratio gain/perte = {rr:.2f}x"
+            rr_color = C_GREEN if rr >= 2 else (C_ORANGE if rr >= 1 else C_RED)
+            fig.add_annotation(
+                text=f"<b style='color:{rr_color}'>{rr_label}</b>"
+                     f"  —  au-dessus de 1x le bot gagne plus qu'il ne perd",
+                x=0.5, y=1.12, xref="paper", yref="paper", showarrow=False,
+                font=dict(size=11, color=C_MUTED), align="center",
+            )
+        lo = _layout(260)
+        lo["yaxis"]["title"] = "Montant moyen ($)"
+        fig.update_layout(**lo, title=_title(
+            "Gain moyen vs Perte moyenne",
+            "Si la barre verte depasse la rouge, le bot est profitable meme avec moins de 50% de victoires."
+        ))
+        return fig
+
+    # ── Assembler la page ─────────────────────────────────────────────────
+    return html.Div([
+        html.H2("Metriques & Performance", style={
+            "fontSize": "18px", "fontWeight": "700", "color": C_TEXT,
+            "marginBottom": "20px", "marginTop": "0",
+        }),
+
+        kpi_row,
+
+        # Courbe du capital — pleine largeur
+        _graph(_chart_capital()),
+        html.Div(style={"height": "16px"}),
+
+        # Victoires vs Defaites  |  Comment les trades se ferment
+        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr",
+                        "gap": "16px", "marginBottom": "16px"}, children=[
+            _graph(_chart_wins()),
+            _graph(_chart_close_reasons()),
+        ]),
+
+        # P&L par actif  |  Courbe d'apprentissage
+        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr",
+                        "gap": "16px", "marginBottom": "16px"}, children=[
+            _graph(_chart_asset_pnl()),
+            _graph(_chart_learning()),
+        ]),
+
+        # Gain moyen vs Perte moyenne — pleine largeur
+        _graph(_chart_rr()),
+
+    ], style={"padding": "24px"})
+
 
 def render_tab(tab: str, state: dict, alpaca: dict, groq_live: str | None = None) -> html.Div:
     try:
@@ -3302,13 +3722,15 @@ def render_tab(tab: str, state: dict, alpaca: dict, groq_live: str | None = None
             return page_analyse(state, alpaca, groq_live=groq_live)
         if tab == "themes":
             return page_themes(state)
+        if tab == "metrics":
+            return page_metrics(state)
     except Exception as exc:
         return html.Div([
             html.Div("Erreur lors du rendu de la page", style={
                 "fontWeight": "800", "color": C_RED, "marginBottom": "8px",
             }),
             html.Pre(str(exc), style={
-                "background": "#fff5f5", "padding": "12px",
+                "background": "#F5EEEE", "padding": "12px",
                 "borderRadius": "8px", "fontSize": "12px", "color": C_RED,
             }),
         ])
@@ -3326,44 +3748,63 @@ def create_app() -> Dash:
 <head>
 {%metas%}<title>{%title%}</title>{%favicon%}{%css%}
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{background:#f0f4f8;color:#1a202c;font-family:'Inter',system-ui,sans-serif;font-size:14px}
+body{
+  background:#F5F4F0;
+  color:#1A1916;
+  font-family:'Inter','Noto Sans JP',system-ui,sans-serif;
+  font-size:14px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
 .topbar{
   position:sticky;top:0;z-index:100;
-  background:#1a202c;color:#fff;
-  padding:0 20px;height:50px;
-  display:flex;align-items:center;gap:14px;
-  box-shadow:0 2px 6px rgba(0,0,0,.3);
+  background:#1A1916;color:#F0EEE8;
+  padding:0 24px;height:52px;
+  display:flex;align-items:center;gap:16px;
+  border-bottom:1px solid rgba(255,255,255,0.04);
 }
-.brand{font-size:15px;font-weight:900;color:#fff;letter-spacing:-.3px}
-.brand span{color:#63b3ed}
-.tb-badge{border-radius:999px;font-size:11px;font-weight:800;padding:3px 10px}
-.badge-live   {background:#276749;color:#68d391}
-.badge-delayed{background:#744210;color:#f6ad55}
-.badge-offline{background:#742a2a;color:#fc8181}
-.tb-price {font-size:13px;color:#90cdf4;font-weight:700}
-.tb-regime{font-size:12px;color:#a0aec0}
-.tb-time  {margin-left:auto;font-size:11px;color:#718096}
+.brand{
+  font-size:13px;font-weight:700;
+  color:#F0EEE8;letter-spacing:0.08em;
+  text-transform:uppercase;
+}
+.brand span{color:#8BBBD4}
+.tb-badge{
+  border-radius:3px;font-size:10px;font-weight:700;
+  padding:3px 8px;letter-spacing:0.06em;text-transform:uppercase;
+}
+.badge-live   {background:#1E3A2A;color:#74B893}
+.badge-delayed{background:#3A2E12;color:#C9A864}
+.badge-offline{background:#3A1E1E;color:#C47878}
+.tb-price {font-size:12px;color:#8BBBD4;font-weight:500;letter-spacing:0.02em}
+.tb-regime{font-size:11px;color:#6A6862;letter-spacing:0.02em}
+.tb-time  {margin-left:auto;font-size:10px;color:#5A5852;letter-spacing:0.03em}
 .nav{
-  background:#fff;border-bottom:2px solid #e2e8f0;
-  padding:0 20px;display:flex;gap:2px;
-  position:sticky;top:50px;z-index:90;
+  background:#FEFEFE;
+  border-bottom:1px solid #E8E6E1;
+  padding:0 24px;display:flex;gap:0;
+  position:sticky;top:52px;z-index:90;
+  overflow-x:auto;
 }
+.nav::-webkit-scrollbar{display:none}
 .tab-btn{
-  padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer;
-  border:none;background:transparent;color:#718096;
-  border-bottom:3px solid transparent;margin-bottom:-2px;
-  transition:color .12s,border-color .12s;
-  white-space:nowrap;
+  padding:12px 16px;font-size:11px;font-weight:600;cursor:pointer;
+  border:none;background:transparent;color:#8C8A84;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color 0.18s ease,border-color 0.18s ease;
+  white-space:nowrap;letter-spacing:0.06em;
+  text-transform:uppercase;
 }
-.tab-btn:hover{color:#3182ce}
-.tab-btn.active{color:#3182ce;border-bottom-color:#3182ce}
-.content{padding:16px 20px 48px;max-width:1420px;margin:0 auto}
+.tab-btn:hover{color:#1A1916}
+.tab-btn.active{color:#375F7A;border-bottom-color:#375F7A}
+.content{padding:20px 24px 60px;max-width:1440px;margin:0 auto}
 @media(max-width:960px){
-  .nav{overflow-x:auto}
-  .tab-btn{padding:9px 12px;font-size:12px}
+  .tab-btn{padding:10px 12px;font-size:10px}
+  .content{padding:14px 14px 48px}
 }
 </style>
 </head>

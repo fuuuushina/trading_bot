@@ -376,10 +376,17 @@ class MarketWatcher:
 
         # 7. Exécution des décisions approuvées
         current_prices = {t: float(df["close"].iloc[-1]) for t, df in data_map.items()}
+        bar_highs: dict[str, float] = {}
+        bar_lows:  dict[str, float] = {}
+        for t, df in data_map.items():
+            if "high" in df.columns: bar_highs[t] = float(df["high"].iloc[-1])
+            if "low"  in df.columns: bar_lows[t]  = float(df["low"].iloc[-1])
         # Add intraday current prices (EURUSD=X last bar)
         for t, df in intraday_map.items():
             current_prices[t] = float(df["close"].iloc[-1])
-        self._execute_decisions(decisions, current_prices)
+            if "high" in df.columns: bar_highs[t] = float(df["high"].iloc[-1])
+            if "low"  in df.columns: bar_lows[t]  = float(df["low"].iloc[-1])
+        self._execute_decisions(decisions, current_prices, bar_highs, bar_lows)
 
         # Update all open positions with current market prices
         self.broker.update_prices(current_prices)
@@ -690,7 +697,16 @@ class MarketWatcher:
             or 0.0
         )
         if allowed_size < min_size:
-            return 0.0, 0.0, f"execution size ${allowed_size:.2f} below minimum ${min_size:.2f}"
+            # Kelly returned minimum fraction (negative edge) but budget exists — bump to min_size
+            budget_available = min(asset_available, horizon_available)
+            if budget_available >= min_size:
+                logger.debug(
+                    "Kelly floor $%.2f below min_size $%.2f — bumping to min_size",
+                    allowed_size, min_size,
+                )
+                allowed_size = min_size
+            else:
+                return 0.0, 0.0, f"execution size ${allowed_size:.2f} below minimum ${min_size:.2f}"
 
         # Apply leverage: margin × leverage / price = quantity
         # Managed assets use orchestrator leverage; legacy forex uses config fallback.
@@ -712,7 +728,13 @@ class MarketWatcher:
             return False
         return asset not in {"DX-Y.NYB"}
 
-    def _execute_decisions(self, decisions: list, current_prices: dict) -> None:
+    def _execute_decisions(
+        self,
+        decisions: list,
+        current_prices: dict,
+        bar_highs: dict | None = None,
+        bar_lows:  dict | None = None,
+    ) -> None:
         """Exécute les décisions approuvées via le broker."""
         try:
             from src.execution.paper_broker import OrderSide
@@ -723,7 +745,7 @@ class MarketWatcher:
 
         # Snapshot trade count BEFORE stop/target checks to detect newly closed positions
         prev_trade_count = len(self.broker.get_trade_history())
-        self.broker.check_stops_and_targets(current_prices)
+        self.broker.check_stops_and_targets(current_prices, bar_highs, bar_lows)
 
         # Record closed positions in performance tracker
         new_trades = self.broker.get_trade_history()[prev_trade_count:]
@@ -750,13 +772,33 @@ class MarketWatcher:
             side = OrderSide.BUY if signal.signal.value == "BUY" else OrderSide.SELL
             current_price = float(current_prices[signal.asset])
 
+            # Guard NaN price (yfinance peut retourner NaN hors-session)
+            import math as _math
+            if not _math.isfinite(current_price) or current_price <= 0:
+                logger.warning("Prix invalide (%.6g) pour %s — exécution ignorée",
+                               current_price, signal.asset)
+                continue
+
+            # Anti-flip: ne pas retourner une position ouverte sur signal adverse.
+            # Laisser SL/TP fermer la position naturellement évite les flip-losses.
+            open_pos = {p["asset"]: p["side"] for p in self.broker.get_open_positions()}
+            if signal.asset in open_pos:
+                existing_side = open_pos[signal.asset]
+                new_side = "long" if side == OrderSide.BUY else "short"
+                if existing_side != new_side:
+                    logger.debug(
+                        "Anti-flip: %s déjà %s — signal %s ignoré, attente SL/TP",
+                        signal.asset, existing_side, new_side,
+                    )
+                    continue
+
             # Kelly-based sizing
             portfolio_now  = self.broker.get_portfolio_state()
-            total_capital  = float(
-                portfolio_now.get("total_equity")
-                or portfolio_now.get("total_capital")
-                or getattr(self.broker, "initial_capital", 2000.0)
-            )
+            _raw_capital = portfolio_now.get("total_equity") or portfolio_now.get("total_capital")
+            total_capital = float(_raw_capital) if (
+                _raw_capital is not None and _math.isfinite(float(_raw_capital)) and float(_raw_capital) > 0
+            ) else float(getattr(self.broker, "initial_capital", 2000.0))
+
             kelly_params = self._perf_tracker.kelly_params(asset=signal.asset)
             asset_type   = _infer_asset_type(signal.asset)
             kelly_size   = self._kelly_sizer.margin_usd(
@@ -769,6 +811,10 @@ class MarketWatcher:
                 regime     = self._last_regime,
                 asset_type = asset_type,
             )
+            # Guard NaN kelly_size (kelly_params manquants ou capital NaN)
+            if not _math.isfinite(kelly_size) or kelly_size <= 0:
+                kelly_size = total_capital * 0.05
+                logger.warning("Kelly size invalide — fallback 5%% capital = $%.2f", kelly_size)
 
             size_usd, shares, budget_reason = self._execution_size_with_current_budget(
                 signal,
@@ -1043,10 +1089,22 @@ class MarketWatcher:
                 },
             }
 
-            tmp_path = out_dir / "bot_state.json.tmp"
+            import math as _math_json
+
+            def _sanitize(obj):
+                """Remplace NaN/Inf par None pour JSON valide."""
+                if isinstance(obj, float):
+                    return None if not _math_json.isfinite(obj) else obj
+                if isinstance(obj, dict):
+                    return {k: _sanitize(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [_sanitize(v) for v in obj]
+                return obj
+
+            tmp_path   = out_dir / "bot_state.json.tmp"
             final_path = out_dir / "bot_state.json"
             with open(tmp_path, "w", encoding="utf-8") as fh:
-                json.dump(doc, fh, indent=2, default=str)
+                json.dump(_sanitize(doc), fh, indent=2, default=str)
             tmp_path.replace(final_path)
 
         except Exception as exc:

@@ -73,7 +73,7 @@ class IntradaySessionBreakoutStrategy(BaseStrategy):
         consolidation_bars  = cfg.get("consolidation_bars",  24)   # 2h
         buffer_mult         = cfg.get("atr_buffer_mult",     0.3)   # breakout buffer
         atr_sl_mult         = cfg.get("atr_multiplier_sl",   1.8)
-        atr_tp_mult         = cfg.get("atr_multiplier_tp",   3.0)
+        atr_tp_mult         = cfg.get("atr_multiplier_tp",   4.0)
         min_conf            = cfg.get("min_confidence",      0.55)
 
         if len(df) < _MIN_BARS:

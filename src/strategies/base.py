@@ -76,10 +76,14 @@ class Signal:
         return self.signal in (SignalType.BUY, SignalType.SELL) and self.approved
 
     def __repr__(self) -> str:
+        try:
+            conf_s = f"{self.confidence:.2f}"
+        except Exception:
+            conf_s = str(self.confidence)
         return (
             f"Signal({self.strategy_name} | {self.asset} | "
             f"{self.signal.value} @ {self.entry_price} | "
-            f"conf={self.confidence:.2f})"
+            f"conf={conf_s})"
         )
 
 

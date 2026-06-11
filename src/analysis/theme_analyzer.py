@@ -81,24 +81,26 @@ class ThemeAnalyzer:
                          (now - self._last_run) / 60)
             return self._cached
 
-        if not articles:
-            scores = self._neutral_scores()
-            self._cached = scores
-            return scores
-
         if self._api_key:
             try:
                 scores = self._analyze_with_groq(articles)
                 if scores:
                     self._cached = scores
-                    self._last_run = now
+                    # When no articles, refresh sooner (2h) in case news becomes available
+                    self._last_run = now if articles else now - _REFRESH_INTERVAL + 2 * 3600
+                    mode = "avec news" if articles else "sans news (connaissances générales)"
                     logger.info(
-                        "ThemeAnalyzer: Groq analysis done — top sector: %s",
-                        max(scores, key=lambda k: scores[k].score)
+                        "ThemeAnalyzer: Groq analysis done [%s] — top sector: %s",
+                        mode, max(scores, key=lambda k: scores[k].score)
                     )
                     return scores
             except Exception as exc:
                 logger.warning("ThemeAnalyzer Groq failed: %s — using keyword fallback", exc)
+
+        if not articles:
+            scores = self._neutral_scores()
+            self._cached = scores
+            return scores
 
         scores = self._keyword_scores(articles)
         self._cached = scores
@@ -112,23 +114,29 @@ class ThemeAnalyzer:
     def _analyze_with_groq(self, articles: list) -> dict[str, ThemeScore]:
         from groq import Groq  # lazy import
 
-        news_lines = [f"- {a.headline}" for a in articles[:60]]
-        news_text = "\n".join(news_lines) if news_lines else "No articles available."
-
         sector_list = "\n".join(
             f"- {k}: {v['description']}" for k, v in SECTOR_UNIVERSE.items()
         )
         available_picks = {k: v["tickers"][:5] for k, v in SECTOR_UNIVERSE.items()}
 
+        if articles:
+            news_lines = [f"- {a.headline}" for a in articles[:60]]
+            news_block = "ACTUALITÉS RÉCENTES:\n" + "\n".join(news_lines)
+        else:
+            news_block = (
+                "CONTEXTE: Aucun article disponible. Base ton analyse sur les grandes "
+                "tendances structurelles actuelles : cycle IA/semi-conducteurs, politique "
+                "monétaire Fed, géopolitique, transition énergétique, consommation US."
+            )
+
         prompt = f"""Tu es un analyste financier senior spécialisé en analyse sectorielle.
 
-Analyse les actualités financières suivantes et évalue la tendance attendue pour chaque secteur sur les 1 à 4 prochaines semaines.
+Évalue la tendance attendue pour chaque secteur sur les 1 à 4 prochaines semaines.
 
 SECTEURS À ANALYSER:
 {sector_list}
 
-ACTUALITÉS RÉCENTES:
-{news_text}
+{news_block}
 
 TICKERS DISPONIBLES PAR SECTEUR (utilise uniquement ceux-là pour top_picks):
 {json.dumps(available_picks, indent=2)}

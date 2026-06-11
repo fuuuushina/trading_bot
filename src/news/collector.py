@@ -257,43 +257,56 @@ class NewsCollector:
     def _fetch_rss(
         self, tickers: list[str] | None, cutoff: float
     ) -> list[RawArticle]:
-        """Fallback RSS : Yahoo Finance, MarketWatch RSS (pas d'API key)."""
-        rss_urls = [
-            "https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US",
-        ]
+        """RSS : Yahoo Finance par ticker + flux marché généraux (sans API key)."""
         articles = []
         try:
             import requests
             from xml.etree import ElementTree as ET
 
-            targets = (tickers or [])[:3]
-            for ticker in targets:
-                for url_template in rss_urls:
-                    url = url_template.format(ticker=ticker)
-                    try:
-                        resp = requests.get(url, timeout=8)
-                        if resp.status_code != 200:
+            def _parse_feed(url: str, source: str, assets: list[str]) -> None:
+                try:
+                    resp = requests.get(url, timeout=8,
+                                        headers={"User-Agent": "Mozilla/5.0"})
+                    if resp.status_code != 200:
+                        return
+                    root = ET.fromstring(resp.text)
+                    for item in root.findall(".//item"):
+                        title = item.findtext("title") or ""
+                        desc  = item.findtext("description") or ""
+                        link  = item.findtext("link") or ""
+                        pub   = _parse_rfc822(item.findtext("pubDate") or "")
+                        if pub < cutoff or not title:
                             continue
-                        root = ET.fromstring(resp.text)
-                        for item in root.findall(".//item"):
-                            title = item.findtext("title") or ""
-                            desc = item.findtext("description") or ""
-                            link = item.findtext("link") or ""
-                            pub = _parse_rfc822(item.findtext("pubDate") or "")
-                            if pub < cutoff:
-                                continue
-                            articles.append(RawArticle.from_headline(
-                                headline=title,
-                                summary=desc,
-                                source="rss_yahoo",
-                                url=link,
-                                published_at=pub,
-                                assets=[ticker],
-                            ))
-                    except Exception:
-                        pass
+                        articles.append(RawArticle.from_headline(
+                            headline=title, summary=desc, source=source,
+                            url=link, published_at=pub, assets=assets,
+                        ))
+                except Exception:
+                    pass
+
+            # Flux marché généraux — pas besoin d'API key
+            _parse_feed(
+                "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
+                "rss_wsj", [],
+            )
+            _parse_feed(
+                "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best",
+                "rss_reuters", [],
+            )
+            _parse_feed(
+                "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+                "rss_marketwatch", [],
+            )
+
+            # Flux Yahoo Finance par ticker (jusqu'à 8 tickers)
+            ticker_rss = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={t}&region=US&lang=en-US"
+            for ticker in (tickers or [])[:8]:
+                _parse_feed(ticker_rss.format(t=ticker), "rss_yahoo", [ticker])
+
         except ImportError:
             pass
+
+        logger.debug("RSS collector: %d articles bruts", len(articles))
         return articles
 
 

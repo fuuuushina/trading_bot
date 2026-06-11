@@ -43,7 +43,7 @@ class IntradayTrendScalpStrategy(BaseStrategy):
         ema_slow             = cfg.get("ema_slow",               21)
         ema_medium           = cfg.get("ema_medium",             50)
         atr_sl_mult          = cfg.get("atr_multiplier_sl",      1.5)
-        atr_tp_mult          = cfg.get("atr_multiplier_tp",      3.0)
+        atr_tp_mult          = cfg.get("atr_multiplier_tp",      4.0)
         min_conf             = cfg.get("min_confidence",         0.45)
         # EMA spread doit être >= ratio × ATR pour éviter le bruit
         min_sep_atr_ratio    = cfg.get("min_sep_atr_ratio",      0.30)
