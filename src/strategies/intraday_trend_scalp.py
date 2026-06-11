@@ -137,7 +137,7 @@ class IntradayTrendScalpStrategy(BaseStrategy):
         is_forex = "=" in asset
         min_sl_pips = cfg.get("min_sl_pips", 15.0)
         sl = self._enforce_min_sl(c, sl, direction, min_sl_pips, is_forex)
-        tp = self._atr_target(c, atr_val, direction, atr_tp_mult)
+        tp = self._tp_from_sl(c, sl, direction, atr_tp_mult / atr_sl_mult)
         rr = self._rr_ratio(c, sl, tp)
 
         if rr is None or rr < 1.8:

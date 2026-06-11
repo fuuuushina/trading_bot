@@ -102,13 +102,12 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
         signal_type = SignalType.BUY if buy_signal else SignalType.SELL
 
         entry = c
-        # TP = ATR × multiplicateur (R:R explicite, plus fiable que la bande médiane)
-        tp = self._atr_target(entry, atr_val, direction, atr_tp_mult)
-        # SL = beyond the band by ATR×sl_mult
+        # SL d'abord, puis TP proportionnel (garantit R:R même si SL est élargi)
         sl = entry - direction * atr_sl_mult * atr_val
         is_forex = "=" in asset
         min_sl_pips = cfg.get("min_sl_pips", 15.0)
         sl = self._enforce_min_sl(entry, sl, direction, min_sl_pips, is_forex)
+        tp = self._tp_from_sl(entry, sl, direction, atr_tp_mult / atr_sl_mult)
         rr = self._rr_ratio(entry, sl, tp)
 
         if rr is None or rr < 1.5:

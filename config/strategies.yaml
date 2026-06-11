@@ -195,8 +195,8 @@ strategies:
     macd_slow: 26
     macd_signal: 9
     ema_trend_period: 21
-    min_hist_atr_ratio: 0.10
-    min_confidence: 0.55
+    min_hist_atr_ratio: 0.06
+    min_confidence: 0.50
     atr_multiplier_sl: 2.5
     atr_multiplier_tp: 5.0
     min_sl_pips: 15
@@ -206,7 +206,7 @@ regime_strategy_map:
   unknown:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "rsi_dip_buyer"]
-    intraday: ["intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
 
   bull_trend:
     long_term: ["true_dca"]

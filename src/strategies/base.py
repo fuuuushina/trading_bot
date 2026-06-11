@@ -181,3 +181,10 @@ class BaseStrategy(ABC):
         if current_dist < min_dist:
             return entry - direction * min_dist
         return sl
+
+    def _tp_from_sl(
+        self, entry: float, sl: float, direction: int, target_rr: float
+    ) -> float:
+        """TP proportionnel au SL réel — garantit R:R même après enforcement du SL minimum."""
+        sl_dist = abs(entry - sl)
+        return entry + direction * sl_dist * target_rr
