@@ -6,8 +6,8 @@
 
 risk:
   # ---- Per-trade risk ----
-  max_risk_per_trade_pct: 0.03     # 3% risk = sizing input (not hard limit)
-  min_risk_reward_ratio: 1.2
+  max_risk_per_trade_pct: 0.02     # 2% risk max par trade (était 3%)
+  min_risk_reward_ratio: 2.0       # Exiger R:R >= 2.0 pour un meilleur ratio gain/perte
   max_leverage: 50.0               # Forex intraday leverage (EUR/USD standard)
 
   # ---- Daily / weekly / monthly loss limits ----
@@ -76,6 +76,14 @@ defensive_mode:
 position_sizing:
   method: "fixed_fractional"   # fixed_fractional | kelly | equal_weight
   kelly_fraction: 0.25          # Conservative Kelly (quarter-Kelly)
-  fixed_risk_pct: 0.02          # 2% risk per trade → ~$40 risk on $2000
+  fixed_risk_pct: 0.015         # 1.5% risk par trade (était 2%) — courbe plus stable
   min_position_usd: 50.0        # Minimum margin per trade
   max_position_usd: 500000.0    # No hard cap — risk formula controls size
+
+# ---- Trailing stop ----
+trailing_stop:
+  enabled: true
+  trail_be_r: 0.25              # Distance de trailing = 25% du risque initial
+  # Activation : dès que le profit >= trail_be_r × risque_initial
+  # Ex: risque=100 pips → trailing de 25 pips, déclenché dès +25 pips de profit
+  # Suit le meilleur prix vu (high-water mark) en continu

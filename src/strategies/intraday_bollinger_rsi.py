@@ -53,7 +53,7 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
         rsi_period   = cfg.get("rsi_period",       14)
         rsi_ob       = cfg.get("rsi_overbought",   62)
         rsi_os       = cfg.get("rsi_oversold",     38)
-        atr_sl_mult  = cfg.get("atr_multiplier_sl", 1.5)
+        atr_sl_mult  = cfg.get("atr_multiplier_sl", 2.5)
         atr_tp_mult  = cfg.get("atr_multiplier_tp", 4.5)
         min_conf     = cfg.get("min_confidence",   0.55)
 
@@ -106,6 +106,9 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
         tp = self._atr_target(entry, atr_val, direction, atr_tp_mult)
         # SL = beyond the band by ATR×sl_mult
         sl = entry - direction * atr_sl_mult * atr_val
+        is_forex = "=" in asset
+        min_sl_pips = cfg.get("min_sl_pips", 15.0)
+        sl = self._enforce_min_sl(entry, sl, direction, min_sl_pips, is_forex)
         rr = self._rr_ratio(entry, sl, tp)
 
         if rr is None or rr < 1.5:

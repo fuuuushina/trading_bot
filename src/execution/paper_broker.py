@@ -108,6 +108,7 @@ class Position:
     opened_at: datetime = field(default_factory=datetime.utcnow)
     metadata: dict = field(default_factory=dict)
     leverage: float = 1.0   # >1 for forex margin positions
+    initial_stop_loss: Optional[float] = None  # SL original pour calcul trailing
 
     @property
     def unrealized_pnl(self) -> float:
@@ -153,6 +154,7 @@ class Position:
             "unrealized_pnl_pct": round(self.unrealized_pnl_pct, 4),
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
+            "initial_stop_loss": self.initial_stop_loss,
             "strategy": self.strategy_name,
             "horizon": self.horizon,
             "opened_at": self.opened_at.isoformat(),
@@ -309,11 +311,17 @@ class PaperBroker:
         bar_highs: dict[str, float] | None = None,
         bar_lows:  dict[str, float] | None = None,
         max_hold_hours_intraday: float = 6.0,
+        trail_be_r: float = 0.5,
     ) -> list[dict]:
         """
         Check open positions against stop-loss and take-profit levels.
         Uses bar HIGH/LOW (when provided) so intra-bar SL/TP are properly detected.
         Priority: SL > TP (worst-case). Intraday positions auto-close after max_hold_hours_intraday.
+
+        Trailing stop (trail_be_r):
+          - At profit >= trail_be_r × initial_risk → SL moved to entry (breakeven)
+          - Every additional trail_be_r × initial_risk of profit → SL trails by trail_be_r × initial_risk
+
         Returns list of auto-close events.
         """
         events = []
@@ -353,6 +361,53 @@ class PaperBroker:
                     to_close.append((asset, "stop_loss",   pos.stop_loss))
                 elif tp_hit:
                     to_close.append((asset, "take_profit", pos.take_profit))
+
+            # Trailing stop continu (high-water mark)
+            # trail_be_r = distance de trailing exprimée en fraction du risque initial
+            # Ex: trail_be_r=0.25 → distance = 25% du risque initial
+            # Activation : dès que le profit >= trail_be_r × initial_risk
+            already_closing = asset in [a for a, _, _ in to_close]
+            if not already_closing and pos.stop_loss is not None and trail_be_r > 0:
+                initial_sl = pos.initial_stop_loss or pos.stop_loss
+                initial_risk = abs(pos.avg_entry_price - initial_sl)
+                if initial_risk > 0:
+                    entry = pos.avg_entry_price
+                    trail_dist = trail_be_r * initial_risk
+
+                    if pos.side == "long":
+                        # Meilleur prix vu = maximum (utilise bar_high quand dispo)
+                        prev_best = pos.metadata.get("trail_best_price", entry)
+                        new_best  = max(prev_best, bar_high)
+                        pos.metadata["trail_best_price"] = new_best
+                        profit = new_best - entry
+
+                        if profit >= trail_dist:
+                            target_sl = new_best - trail_dist
+                            if pos.stop_loss < target_sl:
+                                logger.info(
+                                    "Trailing SL %s long: %.5f → %.5f "
+                                    "(best=%.5f trail=%.1f pips)",
+                                    asset, pos.stop_loss, target_sl,
+                                    new_best, trail_dist * 10000,
+                                )
+                                pos.stop_loss = round(target_sl, 6)
+                    else:  # short
+                        # Meilleur prix vu = minimum (utilise bar_low quand dispo)
+                        prev_best = pos.metadata.get("trail_best_price", entry)
+                        new_best  = min(prev_best, bar_low)
+                        pos.metadata["trail_best_price"] = new_best
+                        profit = entry - new_best
+
+                        if profit >= trail_dist:
+                            target_sl = new_best + trail_dist
+                            if pos.stop_loss > target_sl:
+                                logger.info(
+                                    "Trailing SL %s short: %.5f → %.5f "
+                                    "(best=%.5f trail=%.1f pips)",
+                                    asset, pos.stop_loss, target_sl,
+                                    new_best, trail_dist * 10000,
+                                )
+                                pos.stop_loss = round(target_sl, 6)
 
             # Sortie temporelle : ferme les positions intraday après N heures
             if asset not in [a for a, _, _ in to_close]:
@@ -461,20 +516,21 @@ class PaperBroker:
                 "cash":            round(self.cash, 4),
                 "positions": [
                     {
-                        "asset":         p.asset,
-                        "side":          p.side,
-                        "quantity":      p.quantity,
-                        "avg_entry":     p.avg_entry_price,
-                        "current_price": (
+                        "asset":              p.asset,
+                        "side":               p.side,
+                        "quantity":           p.quantity,
+                        "avg_entry":          p.avg_entry_price,
+                        "current_price":      (
                             p.current_price if math.isfinite(p.current_price)
                             else p.avg_entry_price
                         ),
-                        "stop_loss":     p.stop_loss,
-                        "take_profit":   p.take_profit,
-                        "strategy":      p.strategy_name,
-                        "horizon":       p.horizon,
-                        "opened_at":     p.opened_at.isoformat(),
-                        "leverage":      p.leverage,
+                        "stop_loss":          p.stop_loss,
+                        "take_profit":        p.take_profit,
+                        "initial_stop_loss":  p.initial_stop_loss,
+                        "strategy":           p.strategy_name,
+                        "horizon":            p.horizon,
+                        "opened_at":          p.opened_at.isoformat(),
+                        "leverage":           p.leverage,
                     }
                     for p in self._positions.values()
                 ],
@@ -508,6 +564,7 @@ class PaperBroker:
                     _cp = _cp if math.isfinite(_cp) and _cp > 0 else avg_entry
                 except (TypeError, ValueError):
                     _cp = avg_entry
+                isl_raw = pos.get("initial_stop_loss") or pos.get("stop_loss")
                 self._positions[pos["asset"]] = Position(
                     asset=pos["asset"],
                     side=pos["side"],
@@ -518,6 +575,7 @@ class PaperBroker:
                     horizon=pos.get("horizon", "swing"),
                     stop_loss=pos.get("stop_loss"),
                     take_profit=pos.get("take_profit"),
+                    initial_stop_loss=float(isl_raw) if isl_raw is not None else None,
                     leverage=float(pos.get("leverage", 1.0)),
                     opened_at=opened,
                 )
@@ -657,6 +715,7 @@ class PaperBroker:
                 horizon=order.horizon,
                 stop_loss=meta.get("stop_loss"),
                 take_profit=meta.get("take_profit"),
+                initial_stop_loss=meta.get("stop_loss"),
                 leverage=leverage,
                 metadata=meta,
             )

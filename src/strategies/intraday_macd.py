@@ -39,7 +39,7 @@ class IntradayMACDStrategy(BaseStrategy):
         fast             = cfg.get("macd_fast",            12)
         slow_p           = cfg.get("macd_slow",            26)
         sig_p            = cfg.get("macd_signal",           9)
-        atr_sl_mult      = cfg.get("atr_multiplier_sl",    1.5)
+        atr_sl_mult      = cfg.get("atr_multiplier_sl",    2.5)
         atr_tp_mult      = cfg.get("atr_multiplier_tp",    4.0)
         min_conf         = cfg.get("min_confidence",       0.50)
         ema_period       = cfg.get("ema_trend_period",     21)
@@ -112,6 +112,9 @@ class IntradayMACDStrategy(BaseStrategy):
         signal_type = SignalType.BUY if buy_signal else SignalType.SELL
 
         sl = self._atr_stop(c, atr_val, direction, atr_sl_mult)
+        is_forex = "=" in asset
+        min_sl_pips = cfg.get("min_sl_pips", 15.0)
+        sl = self._enforce_min_sl(c, sl, direction, min_sl_pips, is_forex)
         tp = self._atr_target(c, atr_val, direction, atr_tp_mult)
         rr = self._rr_ratio(c, sl, tp)
 

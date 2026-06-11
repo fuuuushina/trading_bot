@@ -743,9 +743,13 @@ class MarketWatcher:
 
         self.broker.fill_pending_orders(current_prices)
 
+        # Trailing stop config
+        ts_cfg      = self.cfg.get("trailing_stop", {})
+        trail_be_r  = float(ts_cfg.get("trail_be_r", 0.5)) if ts_cfg.get("enabled", True) else 0.0
+
         # Snapshot trade count BEFORE stop/target checks to detect newly closed positions
         prev_trade_count = len(self.broker.get_trade_history())
-        self.broker.check_stops_and_targets(current_prices, bar_highs, bar_lows)
+        self.broker.check_stops_and_targets(current_prices, bar_highs, bar_lows, trail_be_r=trail_be_r)
 
         # Record closed positions in performance tracker
         new_trades = self.broker.get_trade_history()[prev_trade_count:]

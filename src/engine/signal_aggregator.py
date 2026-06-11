@@ -82,6 +82,13 @@ class AggregatedSignal:
 
     def to_signal(self) -> Signal:
         """Convertit en Signal standard pour le pipeline Rules→AI→Risk."""
+        # Nom de stratégie : si 1 contributeur → son nom, sinon "strat1+strat2"
+        if len(self.contributors) == 1:
+            strategy_name = self.contributors[0].strategy_name
+        else:
+            names = [c.strategy_name for c in self.contributors[:3]]
+            strategy_name = "+".join(names)
+
         meta: dict = {
             "aggregated": True,
             "n_agreeing": self.n_agreeing,
@@ -99,7 +106,7 @@ class AggregatedSignal:
             meta["news_risk_override"] = self.news_risk_override
 
         return Signal(
-            strategy_name="aggregated",
+            strategy_name=strategy_name,
             asset=self.asset,
             timeframe=self.timeframe,
             signal=self.action,
@@ -270,6 +277,11 @@ class SignalAggregator:
             risk   = abs(entry - sl)
             reward = abs(tp - entry)
             rr = round(reward / risk, 2) if risk > 0 else None
+
+        # Rejet si R:R aggregé < 2.0
+        if rr is not None and rr < 2.0:
+            logger.debug("Discarded %s: R:R %.2f < 2.0 minimum", asset, rr)
+            return None
 
         # Timeframe dominant (le plus fréquent)
         timeframes = [s.timeframe for s in dominant_signals]

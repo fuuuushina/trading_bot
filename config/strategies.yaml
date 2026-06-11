@@ -138,11 +138,12 @@ strategies:
     timeframe: "5m"
     ema_fast: 9
     ema_slow: 21
-    allow_continuation: true
+    allow_continuation: false   # évite les faux signaux continus
     rsi_period: 14
     min_confidence: 0.55
-    atr_multiplier_sl: 1.5
-    atr_multiplier_tp: 4.5         # R:R = 3.0 — break-even à 25% WR
+    atr_multiplier_sl: 2.5
+    atr_multiplier_tp: 5.0
+    min_sl_pips: 15
 
   intraday_bollinger_rsi:
     enabled: true
@@ -154,8 +155,9 @@ strategies:
     rsi_overbought: 62
     rsi_oversold: 38
     min_confidence: 0.55
-    atr_multiplier_sl: 1.5
-    atr_multiplier_tp: 4.5         # R:R = 3.0
+    atr_multiplier_sl: 2.5
+    atr_multiplier_tp: 5.0
+    min_sl_pips: 15
 
   intraday_session_breakout:
     enabled: true
@@ -164,8 +166,9 @@ strategies:
     consolidation_bars: 24
     atr_buffer_mult: 0.3
     min_confidence: 0.50
-    atr_multiplier_sl: 1.8
-    atr_multiplier_tp: 5.4         # R:R = 3.0 (5.4/1.8)
+    atr_multiplier_sl: 2.5
+    atr_multiplier_tp: 5.0
+    min_sl_pips: 15
 
   # ---- Intraday Trend Scalp (EMA9/21/50 avec filtres qualité stricts) ----
   intraday_trend_scalp:
@@ -176,8 +179,9 @@ strategies:
     ema_slow: 21
     ema_medium: 50
     min_confidence: 0.55
-    atr_multiplier_sl: 1.5
-    atr_multiplier_tp: 4.5   # R:R = 3.0
+    atr_multiplier_sl: 2.5
+    atr_multiplier_tp: 5.0
+    min_sl_pips: 15
     min_sep_atr_ratio: 0.30
     rsi_low: 40
     rsi_high: 68
@@ -193,49 +197,58 @@ strategies:
     ema_trend_period: 21
     min_hist_atr_ratio: 0.10
     min_confidence: 0.55
-    atr_multiplier_sl: 1.5
-    atr_multiplier_tp: 4.5          # R:R = 3.0
+    atr_multiplier_sl: 2.5
+    atr_multiplier_tp: 5.0
+    min_sl_pips: 15
 
 # ---- Regime-to-strategy mapping ----
 regime_strategy_map:
   unknown:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    intraday: ["intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
 
   bull_trend:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "breakout", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    intraday: ["intraday_ema_cross", "intraday_macd"]
+
   bear_trend:
     long_term: ["true_dca"]
-    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    swing: ["ema_cross_swing", "thematic_momentum", "rsi_dip_buyer"]
+    intraday: ["intraday_ema_cross", "intraday_macd"]
+
   range:
     long_term: ["true_dca"]
-    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    swing: ["rsi_dip_buyer", "thematic_momentum"]
+    intraday: ["intraday_bollinger_rsi", "intraday_session_breakout"]
+
   high_volatility:
     long_term: ["true_dca"]
-    swing: ["ema_cross_swing", "momentum_burst", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_session_breakout"]
+    swing: ["rsi_dip_buyer"]
+    intraday: ["intraday_bollinger_rsi"]
+
   low_volatility:
     long_term: ["true_dca"]
-    swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    swing: ["ema_cross_swing", "thematic_momentum", "trend_following"]
+    intraday: ["intraday_bollinger_rsi", "intraday_session_breakout"]
+
   panic:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer"]
-    intraday: ["intraday_trend_scalp"]   # scalp seulement — plus agile en panic
+    intraday: []
+
   euphoric:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_session_breakout"]
+    intraday: ["intraday_ema_cross", "intraday_macd"]
+
   compression:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    intraday: ["intraday_session_breakout", "intraday_bollinger_rsi"]
+
   breakout_expansion:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "breakout", "trend_following"]
-    intraday: ["intraday_ema_cross", "intraday_trend_scalp", "intraday_macd", "intraday_session_breakout"]
+    intraday: ["intraday_ema_cross", "intraday_macd"]

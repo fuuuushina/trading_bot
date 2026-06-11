@@ -167,3 +167,17 @@ class BaseStrategy(ABC):
         self, entry: float, atr_val: float, direction: int, mult: float
     ) -> float:
         return entry + direction * mult * atr_val
+
+    def _enforce_min_sl(
+        self, entry: float, sl: float, direction: int,
+        min_pips: float = 15.0, is_forex: bool = False,
+    ) -> float:
+        """Enforce minimum SL distance. For forex 5-decimal pairs, min_pips in pips."""
+        if is_forex:
+            min_dist = min_pips / 10000.0
+        else:
+            min_dist = entry * 0.003  # 0.3% minimum for stocks/crypto
+        current_dist = abs(entry - sl)
+        if current_dist < min_dist:
+            return entry - direction * min_dist
+        return sl

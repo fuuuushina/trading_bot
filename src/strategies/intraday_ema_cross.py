@@ -44,7 +44,7 @@ class IntradayEMACrossStrategy(BaseStrategy):
         timeframe   = cfg.get("timeframe",      "5m")
         ema_fast    = cfg.get("ema_fast",        9)
         ema_slow    = cfg.get("ema_slow",        21)
-        atr_sl_mult = cfg.get("atr_multiplier_sl", 1.5)
+        atr_sl_mult = cfg.get("atr_multiplier_sl", 2.5)
         atr_tp_mult = cfg.get("atr_multiplier_tp", 4.0)
         min_conf    = cfg.get("min_confidence",  0.55)
         rsi_period  = cfg.get("rsi_period",      14)
@@ -147,6 +147,9 @@ class IntradayEMACrossStrategy(BaseStrategy):
         signal_type = SignalType.BUY if bullish_setup else SignalType.SELL
 
         sl = self._atr_stop(c, atr_val, direction, atr_sl_mult)
+        is_forex = "=" in asset
+        min_sl_pips = cfg.get("min_sl_pips", 15.0)
+        sl = self._enforce_min_sl(c, sl, direction, min_sl_pips, is_forex)
         tp = self._atr_target(c, atr_val, direction, atr_tp_mult)
         rr = self._rr_ratio(c, sl, tp)
 
