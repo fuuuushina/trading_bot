@@ -61,10 +61,10 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
             return no_trade(self.name, asset, timeframe, self.horizon,
                             f"Not enough bars ({len(df)} < {_MIN_BARS})")
 
-        # Penalise strong trends — mean reversion underperforms
-        if regime in ("bull_trend", "bear_trend", "breakout_expansion"):
+        # breakout_expansion = trop de momentum, skip totalement
+        if regime == "breakout_expansion":
             return no_trade(self.name, asset, timeframe, self.horizon,
-                            f"Regime {regime} unfavourable for mean reversion")
+                            "Regime breakout_expansion — skip mean reversion")
 
         close = df["close"]
         upper, basis, lower = _bollinger(close, bb_period, bb_mult)
@@ -91,12 +91,20 @@ class IntradayBollingerRSIStrategy(BaseStrategy):
             return no_trade(self.name, asset, timeframe, self.horizon,
                             f"Band too narrow ({band_width_pct:.4%})")
 
-        buy_signal  = c <= low_val and rsi_cur < rsi_os and rsi_cur > rsi_prev
-        sell_signal = c >= up_val  and rsi_cur > rsi_ob and rsi_cur < rsi_prev
+        buy_signal  = c <= low_val and rsi_cur < rsi_os
+        sell_signal = c >= up_val  and rsi_cur > rsi_ob
 
         if not buy_signal and not sell_signal:
             return no_trade(self.name, asset, timeframe, self.horizon,
                             "No BB+RSI condition met")
+
+        # Bloquer les signaux contre la tendance dominante
+        if buy_signal and regime == "bear_trend":
+            return no_trade(self.name, asset, timeframe, self.horizon,
+                            "BUY blocked in bear_trend — counter-trend")
+        if sell_signal and regime == "bull_trend":
+            return no_trade(self.name, asset, timeframe, self.horizon,
+                            "SELL blocked in bull_trend — counter-trend")
 
         direction   = 1 if buy_signal else -1
         signal_type = SignalType.BUY if buy_signal else SignalType.SELL

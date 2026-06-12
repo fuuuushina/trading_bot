@@ -33,6 +33,7 @@ from src.strategies.base import Horizon, Signal, SignalType
 from src.strategies.breakout import BreakoutStrategy
 from src.strategies.intraday_bollinger_rsi import IntradayBollingerRSIStrategy
 from src.strategies.intraday_ema_cross import IntradayEMACrossStrategy
+from src.strategies.intraday_local_rebound import IntradayLocalReboundStrategy
 from src.strategies.intraday_macd import IntradayMACDStrategy
 from src.strategies.intraday_session_breakout import IntradaySessionBreakoutStrategy
 from src.strategies.intraday_trend_scalp import IntradayTrendScalpStrategy
@@ -124,6 +125,7 @@ class DecisionEngine:
             # Intraday forex strategies
             "intraday_ema_cross":       IntradayEMACrossStrategy(scfg.get("intraday_ema_cross", {})),
             "intraday_bollinger_rsi":   IntradayBollingerRSIStrategy(scfg.get("intraday_bollinger_rsi", {})),
+            "intraday_local_rebound":    IntradayLocalReboundStrategy(scfg.get("intraday_local_rebound", {})),
             "intraday_session_breakout": IntradaySessionBreakoutStrategy(scfg.get("intraday_session_breakout", {})),
             "intraday_trend_scalp":      IntradayTrendScalpStrategy(scfg.get("intraday_trend_scalp", {})),
             "intraday_macd":             IntradayMACDStrategy(scfg.get("intraday_macd", {})),

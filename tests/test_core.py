@@ -27,6 +27,7 @@ from src.strategies.trend_following import TrendFollowingStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.breakout import BreakoutStrategy
 from src.strategies.dca import DCAStrategy
+from src.strategies.intraday_local_rebound import IntradayLocalReboundStrategy
 from src.risk.risk_manager import RiskManager, RiskDecision
 from src.rules.rules_engine import RulesEngine, StatisticalRules, StrategicRules
 
@@ -235,6 +236,41 @@ class TestMeanReversionStrategy:
         signal = self.strategy.generate_signal(df, "AAPL", "range")
         # May or may not generate a signal — must be valid
         assert signal.signal in (SignalType.BUY, SignalType.SELL, SignalType.NO_TRADE)
+
+
+class TestIntradayLocalReboundStrategy:
+
+    def test_buy_after_recent_local_low_rebound(self):
+        close = np.concatenate([
+            np.linspace(100.0, 100.4, 55),
+            [100.2, 99.9, 99.5, 99.0, 98.55, 98.25, 98.45, 98.75, 98.95],
+        ])
+        dates = pd.date_range("2026-01-01", periods=len(close), freq="5min", tz="UTC")
+        df = pd.DataFrame(
+            {
+                "open": np.r_[close[0], close[:-1]],
+                "high": close + 0.18,
+                "low": close - 0.18,
+                "close": close,
+                "volume": 1_000.0,
+            },
+            index=dates,
+        )
+        strategy = IntradayLocalReboundStrategy({
+            "lookback_bars": 36,
+            "touch_lookback_bars": 8,
+            "max_ema21_below_atr": 3.0,
+            "max_ema50_below_atr": 4.0,
+            "min_confidence": 0.45,
+            "min_sl_pips": 5,
+        })
+
+        signal = strategy.generate_signal(df, "EURUSD=X", "range")
+
+        assert signal.signal == SignalType.BUY
+        assert signal.metadata["trigger"] == "local_rebound"
+        assert signal.stop_loss < signal.entry_price
+        assert signal.take_profit > signal.entry_price
 
 
 class TestDCAStrategy:

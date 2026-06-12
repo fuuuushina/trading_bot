@@ -152,12 +152,34 @@ strategies:
     bb_period: 20
     bb_mult: 2.0
     rsi_period: 14
-    rsi_overbought: 62
-    rsi_oversold: 38
+    rsi_overbought: 58
+    rsi_oversold: 42
     min_confidence: 0.55
     atr_multiplier_sl: 2.5
     atr_multiplier_tp: 5.0
     min_sl_pips: 15
+
+  # ---- Intraday Local Rebound (buy-the-dip after confirmed local low) ----
+  intraday_local_rebound:
+    enabled: true
+    horizon: "intraday"
+    timeframe: "5m"
+    lookback_bars: 36
+    touch_lookback_bars: 8
+    low_tolerance_atr: 0.35
+    min_rebound_atr: 0.18
+    max_rebound_atr: 2.20
+    rsi_period: 14
+    rsi_min: 28
+    rsi_max: 58
+    max_ema21_below_atr: 0.85
+    max_ema50_below_atr: 1.75
+    min_confidence: 0.52
+    atr_multiplier_sl: 2.0
+    atr_multiplier_tp: 4.0
+    stop_buffer_atr: 0.35
+    min_sl_pips: 15
+    risk_multiplier: 0.75
 
   intraday_session_breakout:
     enabled: true
@@ -206,12 +228,12 @@ regime_strategy_map:
   unknown:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_bollinger_rsi", "intraday_session_breakout"]
+    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_bollinger_rsi", "intraday_local_rebound", "intraday_session_breakout"]
 
   bull_trend:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "breakout", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_macd"]
+    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_bollinger_rsi", "intraday_local_rebound"]
 
   bear_trend:
     long_term: ["true_dca"]
@@ -221,17 +243,17 @@ regime_strategy_map:
   range:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer", "thematic_momentum"]
-    intraday: ["intraday_bollinger_rsi", "intraday_session_breakout"]
+    intraday: ["intraday_bollinger_rsi", "intraday_local_rebound", "intraday_session_breakout"]
 
   high_volatility:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer"]
-    intraday: ["intraday_bollinger_rsi"]
+    intraday: ["intraday_bollinger_rsi", "intraday_local_rebound"]
 
   low_volatility:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "thematic_momentum", "trend_following"]
-    intraday: ["intraday_bollinger_rsi", "intraday_session_breakout"]
+    intraday: ["intraday_bollinger_rsi", "intraday_local_rebound", "intraday_session_breakout"]
 
   panic:
     long_term: ["true_dca"]
@@ -246,7 +268,7 @@ regime_strategy_map:
   compression:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst"]
-    intraday: ["intraday_session_breakout", "intraday_bollinger_rsi"]
+    intraday: ["intraday_session_breakout", "intraday_bollinger_rsi", "intraday_local_rebound"]
 
   breakout_expansion:
     long_term: ["true_dca"]
