@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.features.indicators import atr, ema, macd
+from src.features.indicators import atr, ema, macd, rsi
 from src.strategies.base import (
     BaseStrategy,
     Horizon,
@@ -57,6 +57,7 @@ class IntradayMACDStrategy(BaseStrategy):
         macd_df = macd(close, fast, slow_p, sig_p)
         atr_val = float(atr(df, 14).iloc[-1])
         ema21   = ema(close, ema_period)
+        rsi_val = float(rsi(close, 14).iloc[-1])
 
         macd_cur  = float(macd_df["macd"].iloc[-1])
         macd_prev = float(macd_df["macd"].iloc[-2])
@@ -67,6 +68,8 @@ class IntradayMACDStrategy(BaseStrategy):
         curr_ema  = float(ema21.iloc[-1])
         c         = float(close.iloc[-1])
 
+        if pd.isna(rsi_val):
+            rsi_val = 50.0
         if any(pd.isna(v) for v in [macd_cur, sig_cur, hist_cur, curr_ema]):
             return no_trade(self.name, asset, timeframe, self.horizon, "NaN indicator")
         if atr_val <= 0:
@@ -135,6 +138,14 @@ class IntradayMACDStrategy(BaseStrategy):
         # Bon côté du zéro
         if (buy_signal and macd_cur > 0) or (sell_signal and macd_cur < 0):
             score += 0.06
+        # RSI confirme la direction
+        if buy_signal and 40 <= rsi_val <= 65:
+            score += 0.05
+        elif sell_signal and 35 <= rsi_val <= 60:
+            score += 0.05
+        elif (buy_signal and rsi_val > 75) or (sell_signal and rsi_val < 25):
+            score -= 0.08  # suracheté/survendu extrême contre la direction
+
         # Régime favorable
         if (buy_signal and regime in ("bull_trend", "breakout_expansion")):
             score += 0.06
@@ -176,7 +187,7 @@ class IntradayMACDStrategy(BaseStrategy):
                 "histogram": round(hist_cur, 7),
                 "crossover": is_cross,
                 "atr":       round(atr_val, 6),
-                "rsi":       50.0,   # placeholder — pas de RSI ici
+                "rsi":       round(rsi_val, 2),
                 "ema_slow":  round(curr_ema, 6),
                 "regime":    regime,
             },

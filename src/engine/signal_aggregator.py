@@ -69,6 +69,7 @@ class AggregatedSignal:
     n_dissenting: int = 0
     reasons: list[str] = field(default_factory=list)
     news_risk_override: Optional[float] = None  # Injecté par le News Layer
+    merged_indicators: dict = field(default_factory=dict)  # Indicateurs techniques moyennés
 
     @property
     def combined_reason(self) -> str:
@@ -102,6 +103,10 @@ class AggregatedSignal:
                 for c in self.contributors
             ],
         }
+        # Préserver les indicateurs techniques moyennés des stratégies contributrices
+        # Indispensable pour que build_signal_features() reçoive des vraies features ML
+        meta.update(self.merged_indicators)
+
         if self.news_risk_override is not None:
             meta["news_risk_override"] = self.news_risk_override
 
@@ -302,6 +307,9 @@ class SignalAggregator:
         ]
         reasons = [s.reason for s in dominant_signals if s.reason]
 
+        # Moyenne les indicateurs techniques des signaux dominants pour le ML filter
+        merged_indicators = _merge_technical_indicators(dominant_signals)
+
         return AggregatedSignal(
             asset=asset,
             action=dominant_action,
@@ -317,4 +325,33 @@ class SignalAggregator:
             n_dissenting=n_dissenting,
             reasons=reasons,
             news_risk_override=news_risk,
+            merged_indicators=merged_indicators,
         )
+
+
+# ------------------------------------------------------------------ #
+# Helpers module-level
+# ------------------------------------------------------------------ #
+
+_TECH_KEYS = ("ema_fast", "ema_slow", "rsi", "atr", "atr_normalized",
+              "macd", "histogram", "bb_upper", "bb_lower", "bb_mid")
+
+
+def _merge_technical_indicators(signals: list) -> dict:
+    """
+    Moyenne les indicateurs techniques des signaux dominants.
+    Garantit que le ML signal filter reçoit de vraies features
+    plutôt que les valeurs par défaut (rsi=50, atr=0...).
+    """
+    buckets: dict[str, list[float]] = {}
+    for sig in signals:
+        meta = getattr(sig, "metadata", {}) or {}
+        for key in _TECH_KEYS:
+            val = meta.get(key)
+            if val is not None:
+                try:
+                    buckets.setdefault(key, []).append(float(val))
+                except (TypeError, ValueError):
+                    pass
+
+    return {k: round(sum(v) / len(v), 7) for k, v in buckets.items() if v}

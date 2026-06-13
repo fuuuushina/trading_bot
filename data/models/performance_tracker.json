@@ -1348,5 +1348,35 @@
     "win": false,
     "closed_at": "2026-06-12T12:56:20.960005+00:00",
     "horizon": "intraday"
+  },
+  {
+    "asset": "EURUSD=X",
+    "strategy": "intraday_ema_cross+intraday_macd",
+    "features": {
+      "ema_spread_ratio": 0,
+      "rsi": 50.0,
+      "rsi_dist_center": 0.0,
+      "bb_position": 0.906,
+      "atr_normalized": 0.0,
+      "session_score": 0.85,
+      "regime_aligned": true,
+      "rr_ratio": 2.0,
+      "confidence_raw": 0.781,
+      "hour": 17,
+      "hour_sin": -0.9659258262890683,
+      "hour_cos": -0.25881904510252063,
+      "_asset": "EURUSD=X",
+      "_regime": "bull_trend",
+      "_signal_type": "SIGNALTYPE.BUY"
+    },
+    "entry_price": 1.158175,
+    "side": "long",
+    "opened_at": "2026-06-12T17:44:01.342381+00:00",
+    "exit_price": 1.157042076253891,
+    "pnl": -12.2309,
+    "return_pct": -0.0978,
+    "win": false,
+    "closed_at": "2026-06-12T23:15:55.741380+00:00",
+    "horizon": "intraday"
   }
 ]

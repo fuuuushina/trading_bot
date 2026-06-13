@@ -386,6 +386,14 @@ class MarketWatcher:
             current_prices[t] = float(df["close"].iloc[-1])
             if "high" in df.columns: bar_highs[t] = float(df["high"].iloc[-1])
             if "low"  in df.columns: bar_lows[t]  = float(df["low"].iloc[-1])
+
+        # Live mark-to-market pour les positions swing : les barres daily yfinance
+        # retournent la clôture d'hier comme dernier bar complet pendant la session.
+        # On surcharge avec une barre 1min period=1d pour avoir le prix en temps réel.
+        live_prices = self._fetch_live_swing_prices()
+        for t, p in live_prices.items():
+            current_prices[t] = p
+
         self._execute_decisions(decisions, current_prices, bar_highs, bar_lows)
 
         # Update all open positions with current market prices
@@ -530,6 +538,73 @@ class MarketWatcher:
             legacy = [t for t in self.universe.tickers_for(WatchFrequency.INTRADAY)
                       if not t.endswith("_5M") and t not in managed]
         return managed + legacy
+
+    def _fetch_live_swing_prices(self) -> dict[str, float]:
+        """Fetch live intraday prices for open swing/long-term positions.
+
+        Daily bars (period='2y', interval='1d') return yesterday's close as the last
+        completed bar during the trading session — so swing PnL/equity appears frozen
+        all day. One batched 1-minute download (period='1d') covers all open
+        non-intraday positions and gives real-time mark-to-market prices.
+        """
+        try:
+            import math as _m
+            import yfinance as yf
+        except ImportError:
+            return {}
+
+        intraday_tickers = set(self._get_intraday_tickers())
+        open_positions = self.broker.get_open_positions()
+        swing_tickers = list({
+            p["asset"] for p in open_positions
+            if p.get("asset") and p["asset"] not in intraday_tickers
+        })
+        if not swing_tickers:
+            return {}
+
+        live: dict[str, float] = {}
+        try:
+            raw = yf.download(
+                swing_tickers, period="1d", interval="1m",
+                auto_adjust=True, progress=False, group_by="ticker",
+            )
+            if raw.empty:
+                return {}
+
+            if len(swing_tickers) == 1:
+                # Single ticker: flat columns (Open, High, Low, Close, Volume)
+                col = next(
+                    (c for c in raw.columns if str(c).lower() == "close"),
+                    None,
+                )
+                if col is not None:
+                    price = float(raw[col].dropna().iloc[-1])
+                    if _m.isfinite(price) and price > 0:
+                        live[swing_tickers[0]] = price
+            else:
+                # Multiple tickers: MultiIndex (field, ticker) or (ticker, field)
+                # Detect orientation: if first level contains ticker names → (ticker, field)
+                lvl0 = list(raw.columns.get_level_values(0).unique())
+                ticker_in_lvl0 = any(t in lvl0 for t in swing_tickers)
+                for ticker in swing_tickers:
+                    try:
+                        if ticker_in_lvl0:
+                            series = raw[ticker]["Close"].dropna()
+                        else:
+                            series = raw["Close"][ticker].dropna()
+                        if series.empty:
+                            continue
+                        price = float(series.iloc[-1])
+                        if _m.isfinite(price) and price > 0:
+                            live[ticker] = price
+                    except Exception:
+                        pass
+        except Exception as exc:
+            logger.debug("Live swing batch fetch failed: %s", exc)
+
+        if live:
+            logger.debug("Live swing prices updated (%d tickers)", len(live))
+        return live
 
     def _fetch_data(
         self,

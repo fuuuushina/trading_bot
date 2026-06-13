@@ -199,6 +199,7 @@ class PaperBroker:
         self._pending_orders: list[Order] = []
         self._order_history: list[Order] = []
         self._trade_history: list[dict] = []
+        self._peak_equity: float = initial_capital   # High-water mark pour drawdown réel
 
     # ------------------------------------------------------------------ #
     # Order submission
@@ -458,8 +459,10 @@ class PaperBroker:
         total_unrealized = sum(p.unrealized_pnl for p in self._positions.values())
         total_equity = self.cash + non_lev_long - non_lev_short + lev_value
         available_cash = max(0.0, self.cash)
-        peak_equity = self.initial_capital
-        drawdown_pct = (total_equity - peak_equity) / peak_equity
+        # High-water mark : met à jour le pic seulement si equity monte
+        if total_equity > self._peak_equity:
+            self._peak_equity = total_equity
+        drawdown_pct = (total_equity - self._peak_equity) / max(self._peak_equity, 1e-10)
 
         asset_exposure = {a: p.market_value for a, p in self._positions.items()}
         horizon_exposure: dict[str, float] = {}
@@ -513,6 +516,7 @@ class PaperBroker:
             out.parent.mkdir(parents=True, exist_ok=True)
             state = {
                 "initial_capital": self.initial_capital,
+                "peak_equity":     round(self._peak_equity, 4),
                 "cash":            round(self.cash, 4),
                 "positions": [
                     {
@@ -553,6 +557,7 @@ class PaperBroker:
                 return False
             data = json.loads(p.read_text(encoding="utf-8"))
             self.cash = float(data.get("cash", self.initial_capital))
+            self._peak_equity = float(data.get("peak_equity", self.initial_capital))
             self._trade_history = data.get("trade_history", [])
             self._positions = {}
             for pos in data.get("positions", []):

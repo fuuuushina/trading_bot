@@ -11,7 +11,7 @@ A single blocking rule stops the trade regardless of strategy confidence.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import datetime, time, timezone, timedelta
 from typing import Any
 
 import pandas as pd
@@ -254,21 +254,50 @@ class StrategicRules:
         self, signal: Signal, regime: str
     ) -> RuleResult:
         name = "no_counter_trend"
+        # Seules ces stratégies peuvent aller à contre-tendance du régime global
         exempt = ("mean_reversion", "intraday_mean_reversion", "thematic_momentum",
-                  "rsi_dip_buyer", "ema_cross_swing", "momentum_burst")
+                  "rsi_dip_buyer", "ema_cross_swing", "momentum_burst",
+                  "intraday_bollinger_rsi", "intraday_local_rebound")
         strategy_names = set(_strategy_names_for_signal(signal))
         exempt_matches = strategy_names.intersection(exempt)
-        if exempt_matches:
-            return RuleResult(
-                name, True,
-                f"{', '.join(sorted(exempt_matches))} exempt from counter-trend rule."
-            )
 
-        if signal.signal == SignalType.BUY and regime == "bear_trend":
-            return RuleResult(name, False, "BUY signal in bear_trend without mean-reversion strategy.")
-        if signal.signal == SignalType.SELL and regime == "bull_trend":
-            return RuleResult(name, False, "SELL signal in bull_trend without mean-reversion strategy.")
-        return RuleResult(name, True, "Signal aligned with regime.")
+        bull_regimes = {"bull_trend", "breakout_expansion", "euphoric"}
+        bear_regimes = {"bear_trend", "panic"}
+
+        # Régimes forts : aucune exception (même les stratégies exemptées respectent la tendance)
+        if regime in bull_regimes:
+            if signal.signal == SignalType.SELL:
+                if not exempt_matches:
+                    return RuleResult(name, False,
+                                      f"SELL interdit en régime {regime} (marché haussier fort).")
+                # Stratégies exemptées : acceptées uniquement si RSI suracheté (> 70)
+                rsi_val = signal.metadata.get("rsi", 50)
+                try:
+                    rsi_val = float(rsi_val)
+                except (TypeError, ValueError):
+                    rsi_val = 50.0
+                if rsi_val < 68:
+                    return RuleResult(name, False,
+                                      f"SELL en {regime}: RSI={rsi_val:.1f} < 68, pas suracheté.")
+            return RuleResult(name, True, f"BUY en {regime}: aligné.")
+
+        if regime in bear_regimes:
+            if signal.signal == SignalType.BUY:
+                if not exempt_matches:
+                    return RuleResult(name, False,
+                                      f"BUY interdit en régime {regime} (marché baissier fort).")
+                rsi_val = signal.metadata.get("rsi", 50)
+                try:
+                    rsi_val = float(rsi_val)
+                except (TypeError, ValueError):
+                    rsi_val = 50.0
+                if rsi_val > 32:
+                    return RuleResult(name, False,
+                                      f"BUY en {regime}: RSI={rsi_val:.1f} > 32, pas survendu.")
+            return RuleResult(name, True, f"SELL en {regime}: aligné.")
+
+        # Régimes neutres (range, compression, high_volatility…) : pas de filtre directionnel
+        return RuleResult(name, True, f"Régime neutre ({regime}): les deux directions acceptées.")
 
     def check_no_position_averaging_down(
         self, signal: Signal, open_positions: list[dict]
@@ -330,6 +359,62 @@ class StrategicRules:
                 f"Last {max_losses} {signal.horizon.value} trades all losses — pausing."
             )
         return RuleResult(name, True, f"Consecutive losses within limit.")
+
+    def check_no_duplicate_position(
+        self, signal: Signal, open_positions: list[dict]
+    ) -> RuleResult:
+        """Bloque l'ouverture d'une position si une position identique (même asset, même sens)
+        est déjà ouverte — évite la multiplication de positions sur le même asset."""
+        name = "no_duplicate_position"
+        if signal.horizon != Horizon.INTRADAY:
+            return RuleResult(name, True, "Duplicate check not strict for swing/long-term.")
+
+        signal_side = "long" if signal.signal == SignalType.BUY else "short"
+        for pos in open_positions:
+            if (pos.get("asset") == signal.asset
+                    and pos.get("horizon", "intraday") == "intraday"
+                    and pos.get("side") == signal_side):
+                return RuleResult(
+                    name, False,
+                    f"Déjà une position {signal_side} ouverte sur {signal.asset} en intraday."
+                )
+        return RuleResult(name, True, "Pas de position dupliquée.")
+
+    def check_intraday_cooldown(
+        self, signal: Signal, trade_history: list[dict]
+    ) -> RuleResult:
+        """Impose un cooldown minimal entre deux trades intraday sur le même asset.
+        Évite l'over-trading : réentrée immédiate après une sortie perdante."""
+        name = "intraday_cooldown"
+        if signal.horizon != Horizon.INTRADAY:
+            return RuleResult(name, True, "Cooldown uniquement pour intraday.")
+
+        cooldown_minutes = self.risk.get("intraday", {}).get("cooldown_minutes", 15)
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(minutes=cooldown_minutes)
+
+        for trade in reversed(trade_history):
+            if trade.get("asset") != signal.asset:
+                continue
+            if trade.get("horizon", "intraday") != "intraday":
+                continue
+            closed_raw = trade.get("closed_at", "")
+            if not closed_raw:
+                continue
+            try:
+                closed_at = datetime.fromisoformat(closed_raw.replace("Z", "+00:00"))
+                if closed_at.tzinfo is None:
+                    closed_at = closed_at.replace(tzinfo=timezone.utc)
+                if closed_at >= cutoff:
+                    minutes_ago = int((now - closed_at).total_seconds() / 60)
+                    return RuleResult(
+                        name, False,
+                        f"Cooldown actif sur {signal.asset}: dernier trade fermé il y a "
+                        f"{minutes_ago}min (cooldown={cooldown_minutes}min)."
+                    )
+            except (ValueError, TypeError):
+                continue
+        return RuleResult(name, True, f"Cooldown OK (>{cooldown_minutes}min depuis dernier trade).")
 
     def check_ai_disagreement(
         self,
@@ -406,6 +491,8 @@ class RulesEngine:
             self.strat.check_market_hours(signal),
             self.strat.check_no_counter_trend(signal, regime),
             self.strat.check_no_position_averaging_down(signal, open_positions),
+            self.strat.check_no_duplicate_position(signal, open_positions),
+            self.strat.check_intraday_cooldown(signal, trade_history),
             self.strat.check_concentration(signal, portfolio_state),
             self.strat.check_minimum_confidence(signal),
             self.strat.check_consecutive_losses(signal, trade_history),

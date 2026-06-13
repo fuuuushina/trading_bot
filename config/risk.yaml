@@ -34,11 +34,12 @@ risk:
 
   # ---- Intraday specific ----
   intraday:
-    max_consecutive_losses: 20
-    max_daily_trades: 200
-    stop_after_daily_loss_pct: 0.20   # 20% before stopping intraday (paper mode — agressif)
-    min_volume_intraday: 0            # no volume filter on forex
-    max_spread_pct: 0.005             # 0.5% — relaxed for aggressive mode
+    max_consecutive_losses: 4        # pause après 4 pertes consécutives
+    max_daily_trades: 30             # max 30 trades/jour (objectif : 5-8 trades réels)
+    stop_after_daily_loss_pct: 0.05  # pause intraday après -5% dans la journée
+    min_volume_intraday: 0           # no volume filter on forex
+    max_spread_pct: 0.005            # 0.5%
+    cooldown_minutes: 8              # 8 min entre trades sur le même asset
 
   # ---- Swing specific ----
   swing:

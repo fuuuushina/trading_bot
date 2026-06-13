@@ -138,12 +138,13 @@ strategies:
     timeframe: "5m"
     ema_fast: 9
     ema_slow: 21
-    allow_continuation: false   # évite les faux signaux continus
+    allow_continuation: false
     rsi_period: 14
-    min_confidence: 0.55
+    min_sep_atr_ratio: 0.30
+    min_confidence: 0.58
     atr_multiplier_sl: 2.5
-    atr_multiplier_tp: 5.0
-    min_sl_pips: 15
+    atr_multiplier_tp: 7.5     # R:R = 3.0
+    min_sl_pips: 12
 
   intraday_bollinger_rsi:
     enabled: true
@@ -154,12 +155,12 @@ strategies:
     rsi_period: 14
     rsi_overbought: 58
     rsi_oversold: 42
-    min_confidence: 0.55
+    min_confidence: 0.56
     atr_multiplier_sl: 2.5
-    atr_multiplier_tp: 5.0
-    min_sl_pips: 15
+    atr_multiplier_tp: 7.5
+    min_sl_pips: 12
 
-  # ---- Intraday Local Rebound (buy-the-dip after confirmed local low) ----
+  # ---- Intraday Local Rebound (buy-the-dip après creux local confirmé) ----
   intraday_local_rebound:
     enabled: true
     horizon: "intraday"
@@ -167,32 +168,31 @@ strategies:
     lookback_bars: 36
     touch_lookback_bars: 8
     low_tolerance_atr: 0.35
-    min_rebound_atr: 0.18
-    max_rebound_atr: 2.20
+    min_rebound_atr: 0.20
+    max_rebound_atr: 2.00
     rsi_period: 14
-    rsi_min: 28
+    rsi_min: 30
     rsi_max: 58
     max_ema21_below_atr: 0.85
     max_ema50_below_atr: 1.75
-    min_confidence: 0.52
+    min_confidence: 0.56
     atr_multiplier_sl: 2.0
-    atr_multiplier_tp: 4.0
+    atr_multiplier_tp: 6.0   # R:R = 3.0
     stop_buffer_atr: 0.35
-    min_sl_pips: 15
+    min_sl_pips: 12
     risk_multiplier: 0.75
 
   intraday_session_breakout:
     enabled: true
     horizon: "intraday"
     timeframe: "5m"
-    consolidation_bars: 24
-    atr_buffer_mult: 0.3
-    min_confidence: 0.50
+    consolidation_bars: 28
+    atr_buffer_mult: 0.35
+    min_confidence: 0.56
     atr_multiplier_sl: 2.5
-    atr_multiplier_tp: 5.0
-    min_sl_pips: 15
+    atr_multiplier_tp: 7.5   # R:R = 3.0
+    min_sl_pips: 12
 
-  # ---- Intraday Trend Scalp (EMA9/21/50 avec filtres qualité stricts) ----
   intraday_trend_scalp:
     enabled: true
     horizon: "intraday"
@@ -200,15 +200,14 @@ strategies:
     ema_fast: 9
     ema_slow: 21
     ema_medium: 50
-    min_confidence: 0.55
+    min_confidence: 0.58
     atr_multiplier_sl: 2.5
-    atr_multiplier_tp: 5.0
-    min_sl_pips: 15
+    atr_multiplier_tp: 7.5   # R:R = 3.0
+    min_sl_pips: 12
     min_sep_atr_ratio: 0.30
     rsi_low: 40
     rsi_high: 68
 
-  # ---- Intraday MACD (12,26,9 cross + continuation) ----
   intraday_macd:
     enabled: true
     horizon: "intraday"
@@ -217,60 +216,70 @@ strategies:
     macd_slow: 26
     macd_signal: 9
     ema_trend_period: 21
-    min_hist_atr_ratio: 0.06
-    min_confidence: 0.50
+    min_hist_atr_ratio: 0.10
+    min_confidence: 0.54
     atr_multiplier_sl: 2.5
-    atr_multiplier_tp: 5.0
-    min_sl_pips: 15
+    atr_multiplier_tp: 7.5   # R:R = 3.0
+    min_sl_pips: 12
 
 # ---- Regime-to-strategy mapping ----
+# Intraday: max 2 strategies per regime to reduce signal noise and conflicting positions
 regime_strategy_map:
   unknown:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_bollinger_rsi", "intraday_local_rebound", "intraday_session_breakout"]
+    intraday: ["intraday_ema_cross", "intraday_session_breakout"]
 
   bull_trend:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "thematic_momentum", "trend_following", "breakout", "rsi_dip_buyer"]
-    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_bollinger_rsi", "intraday_local_rebound"]
+    # Bull: trend-following only (no bollinger RSI which generates counter-trend SELLs)
+    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_trend_scalp"]
 
   bear_trend:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "thematic_momentum", "rsi_dip_buyer"]
+    # Bear: trend-following short only
     intraday: ["intraday_ema_cross", "intraday_macd"]
 
   range:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer", "thematic_momentum"]
-    intraday: ["intraday_bollinger_rsi", "intraday_local_rebound", "intraday_session_breakout"]
+    # Range: mean-reversion strategies (bollinger + local rebound)
+    intraday: ["intraday_bollinger_rsi", "intraday_local_rebound"]
 
   high_volatility:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer"]
-    intraday: ["intraday_bollinger_rsi", "intraday_local_rebound"]
+    # High vol: only mean-reversion with confirmed local low (safer)
+    intraday: ["intraday_local_rebound"]
 
   low_volatility:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "thematic_momentum", "trend_following"]
-    intraday: ["intraday_bollinger_rsi", "intraday_local_rebound", "intraday_session_breakout"]
+    # Low vol: session breakout is effective when volatility compresses
+    intraday: ["intraday_session_breakout", "intraday_bollinger_rsi"]
 
   panic:
     long_term: ["true_dca"]
     swing: ["rsi_dip_buyer"]
+    # Panic: no intraday (too dangerous, spreads widen)
     intraday: []
 
   euphoric:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst"]
-    intraday: ["intraday_ema_cross", "intraday_macd"]
+    # Euphoric: trend continuation only (no contrarian shorts)
+    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_trend_scalp"]
 
   compression:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst"]
-    intraday: ["intraday_session_breakout", "intraday_bollinger_rsi", "intraday_local_rebound"]
+    # Compression: breakout strategies (anticipate expansion)
+    intraday: ["intraday_session_breakout"]
 
   breakout_expansion:
     long_term: ["true_dca"]
     swing: ["ema_cross_swing", "momentum_burst", "breakout", "trend_following"]
-    intraday: ["intraday_ema_cross", "intraday_macd"]
+    # Breakout: ride the move with MACD/EMA cross + trend scalp
+    intraday: ["intraday_ema_cross", "intraday_macd", "intraday_trend_scalp"]
